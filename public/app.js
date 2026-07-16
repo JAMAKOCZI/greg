@@ -23,6 +23,7 @@ const els = {
   sidebarBackdrop: $("sidebar-backdrop"),
   sessionList: $("session-list"),
   historyList: $("history-list"),
+  recentsList: $("recents-list"),
 };
 
 /** When set, main pane is a read-only history replay (not a live tab). */
@@ -218,6 +219,64 @@ async function loadMeta() {
     `;
   } catch (e) {
     els.meta.textContent = e.message;
+  }
+}
+
+/** @type {Array<{path:string,base:string,lastUsedAt:number}>} */
+let recentsCache = [];
+
+async function refreshRecents() {
+  try {
+    const data = await api("/api/recents");
+    recentsCache = data.recents || [];
+  } catch {
+    recentsCache = [];
+  }
+  renderRecents();
+}
+
+function renderRecents() {
+  if (!els.recentsList) return;
+  els.recentsList.innerHTML = "";
+  for (const item of recentsCache) {
+    const row = document.createElement("div");
+    row.className = "recent-item";
+
+    const pick = document.createElement("button");
+    pick.type = "button";
+    pick.className = "recent-pick";
+    pick.title = item.path;
+    pick.innerHTML = `
+      <span class="recent-title">${escapeHtml(item.base || cwdBase(item.path))}</span>
+      <span class="recent-sub">${escapeHtml(item.path)}</span>
+    `;
+    pick.addEventListener("click", () => {
+      els.cwd.value = item.path;
+      void newSession();
+    });
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "btn icon recent-delete";
+    del.title = "Remove from recents";
+    del.setAttribute("aria-label", "Remove from recents");
+    del.textContent = "×";
+    del.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        await api("/api/recents", {
+          method: "DELETE",
+          body: JSON.stringify({ path: item.path }),
+        });
+        await refreshRecents();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    row.appendChild(pick);
+    row.appendChild(del);
+    els.recentsList.appendChild(row);
   }
 }
 
@@ -1213,6 +1272,7 @@ async function newSession() {
     appendBubble(st, "system", "Spawning grok agent stdio…");
     appendBubble(st, "system", `Session ready · ${data.cwd}`);
 
+    if (data.cwd) els.cwd.value = data.cwd;
     connectStream(st);
     updateSessionLabel(st);
     setStatus("ready", "Ready");
@@ -1220,11 +1280,13 @@ async function newSession() {
     setStopEnabled(true);
     renderSessionList();
     void refreshHistory(); // immediate on new session
+    void refreshRecents();
     els.prompt.focus();
   } catch (e) {
     setStatus("error", "Failed");
     const hint = e.data?.hint ? `\n${e.data.hint}` : "";
-    const msg = `${e.message}${hint}`;
+    const code = e.data?.code ? ` (${e.data.code})` : "";
+    const msg = `${e.message}${code}${hint}`;
 
     // Restore previous tab if any
     if (prev) {
@@ -1527,6 +1589,7 @@ if (els.sidebarBackdrop) {
 loadMeta();
 hydrateSessions();
 void refreshHistory();
+void refreshRecents();
 setStatus("idle", "Idle");
 setStopEnabled(false);
 setComposerEnabled(false);

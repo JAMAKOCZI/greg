@@ -8,7 +8,7 @@ Greg is a browser UI that runs on your machine and talks to the official `grok` 
 
 ## Status
 
-Early (`0.4.0`). Multi-session desk, cancel turn, tool/diff/plan cards, and **durable history** under `~/.greg/sessions` (sidebar replay). Workspace switcher still to come.
+Early (`0.5.0`). Multi-session desk, cancel, tool/diff/plan cards, durable history, and **workspace recents** (validated paths, MRU under `~/.greg/recents.json`).
 
 ## Requirements
 
@@ -46,6 +46,7 @@ Open it in your browser. The server binds to **localhost only**.
 | `GREG_CWD`   | cwd     | Initial workspace for new sessions |
 | `GREG_NO_OPEN` | unset | Set to `1` to skip opening a browser |
 | `GREG_SESSIONS_DIR` | `~/.greg/sessions` | Where Greg stores durable chat transcripts |
+| `GREG_RECENTS_PATH` | `~/.greg/recents.json` | Recent workspace paths (MRU) |
 
 ## Architecture
 

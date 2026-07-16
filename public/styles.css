@@ -253,6 +253,84 @@ body {
   line-height: 1.4;
 }
 
+.recents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  max-height: 18vh;
+  overflow: auto;
+}
+
+.recents-list:empty + .recents-hint {
+  display: block;
+}
+
+.recents-list:not(:empty) + .recents-hint {
+  display: none;
+}
+
+.recents-hint {
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.recent-pick {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.recent-pick:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.recent-title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-sub {
+  display: block;
+  font-size: 10.5px;
+  color: var(--muted);
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.recent-delete {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.recent-delete:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+
 .history-list {
   display: flex;
   flex-direction: column;

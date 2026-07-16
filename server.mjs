@@ -17,15 +17,22 @@ import {
   TranscriptStore,
   defaultSessionsDir,
 } from "./lib/transcript-store.mjs";
+import {
+  resolveWorkspace,
+  RecentsStore,
+  defaultRecentsPath,
+} from "./lib/workspace.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
 const DEFAULT_CWD = process.env.GREG_CWD || process.cwd();
 const GROK_BIN = process.env.GROK_BIN || "grok";
 const SESSIONS_DIR = process.env.GREG_SESSIONS_DIR || defaultSessionsDir();
+const RECENTS_PATH = process.env.GREG_RECENTS_PATH || defaultRecentsPath();
 
 const tabs = new TabRegistry();
 const transcripts = new TranscriptStore({ rootDir: SESSIONS_DIR });
+const recents = new RecentsStore({ filePath: RECENTS_PATH });
 
 const bootstrapToken = newBootstrapToken();
 const sessionSecret = newSessionSecret();
@@ -37,12 +44,66 @@ const server = createGregServer({
     if (url.pathname === "/api/meta" && req.method === "GET") {
       json(res, 200, {
         name: "greg",
-        version: "0.4.0",
+        version: "0.5.0",
         grokBin: GROK_BIN,
         defaultCwd: DEFAULT_CWD,
         sessionsDir: SESSIONS_DIR,
         platform: platform(),
       });
+      return true;
+    }
+
+    // Recent workspaces
+    if (url.pathname === "/api/recents" && req.method === "GET") {
+      try {
+        await recents.pruneMissing().catch(() => 0);
+        const list = await recents.list();
+        json(res, 200, { recents: list });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    if (url.pathname === "/api/recents" && req.method === "POST") {
+      const body = await readJson(req);
+      try {
+        const result = await recents.touch(body.path || "");
+        if (!result.ok) {
+          json(res, 400, { error: result.error, code: result.code });
+          return true;
+        }
+        json(res, 200, { ok: true, path: result.path, recents: result.recents });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    if (url.pathname === "/api/recents" && req.method === "DELETE") {
+      const body =
+        req.headers["content-type"]?.includes("json")
+          ? await readJson(req).catch(() => ({}))
+          : {};
+      const path =
+        body.path || url.searchParams.get("path") || "";
+      try {
+        const removed = await recents.remove(path);
+        json(res, 200, { ok: true, removed });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    if (url.pathname === "/api/workspace/resolve" && req.method === "POST") {
+      const body = await readJson(req);
+      const result = await resolveWorkspace(body.path || "");
+      if (!result.ok) {
+        json(res, 400, { error: result.error, code: result.code });
+        return true;
+      }
+      json(res, 200, result);
       return true;
     }
 
@@ -114,7 +175,18 @@ const server = createGregServer({
 
     if (url.pathname === "/api/session/new" && req.method === "POST") {
       const body = await readJson(req);
-      const cwd = body.cwd || DEFAULT_CWD;
+      const cwdInput = (body.cwd || DEFAULT_CWD || "").trim() || DEFAULT_CWD;
+      const resolved = await resolveWorkspace(cwdInput);
+      if (!resolved.ok) {
+        json(res, 400, {
+          error: resolved.error,
+          code: resolved.code,
+          hint: "Pick an existing project directory",
+        });
+        return true;
+      }
+      const cwd = resolved.path;
+
       // Client may send tabId only to reconnect/replace that tab; otherwise always create new.
       const tabId = body.tabId || newClientSessionId();
       const existing = tabs.get(tabId);
@@ -153,6 +225,11 @@ const server = createGregServer({
           });
         } catch (persistErr) {
           console.error("[greg] transcript create failed", persistErr);
+        }
+        try {
+          await recents.touch(cwd, { skipValidate: true });
+        } catch (recErr) {
+          console.error("[greg] recents touch failed", recErr);
         }
         json(res, 200, {
           tabId,

@@ -43,6 +43,14 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 
 Step-by-step product plan: [superpowers/plans/2026-07-16-codex-quality-roadmap.md](superpowers/plans/2026-07-16-codex-quality-roadmap.md).
 
+## Workspace recents (v0.5)
+
+- `lib/workspace.mjs`: `resolveWorkspace` (empty / missing / not-a-dir / `~` expand)
+- `RecentsStore` → `~/.greg/recents.json` (max 20, MRU, prune missing on list)
+- `POST /api/session/new` rejects invalid cwd with `400` + `code`
+- Successful session adds cwd to recents; `GET/POST/DELETE /api/recents`
+- UI: click recent → fill path + New session
+
 ## Durable transcripts (v0.4)
 
 Greg-owned history (not `~/.grok/sessions`):
@@ -81,5 +89,5 @@ Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests
 - [x] Durable transcripts under `~/.greg/sessions` (Greg-owned)
 - [ ] Multi-tab session history from `~/.grok/sessions` (optional import later)
 - [x] Manual vs auto-approve permission cards (wired end-to-end)
-- [ ] Project sidebar + workspace switcher (path field only for now)
+- [x] Project sidebar + workspace recents (validated path + MRU)
 - [ ] Optional Tauri shell later (desktop packaging of this same UI)

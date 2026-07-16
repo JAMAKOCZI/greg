@@ -306,22 +306,22 @@ Store under **`~/.greg/sessions/<id>.json`** (Greg-owned). Do **not** depend on 
 - Create: `lib/workspace.mjs`
 - Create: `test/workspace.test.mjs`
 
-- [ ] `resolveWorkspace(path)` → absolute path or error
-- [ ] Reject empty; optionally reject non-existent dirs (configurable)
-- [ ] Recents list in `~/.greg/recents.json` (max 20)
-- [ ] Commit `feat: workspace path helpers and recents store`
+- [x] `resolveWorkspace(path)` → absolute path or error
+- [x] Reject empty; optionally reject non-existent dirs (configurable)
+- [x] Recents list in `~/.greg/recents.json` (max 20)
+- [x] Commit `feat: workspace path helpers and recents store`
 
 #### Task 3.2 — API + UI
 
-- [ ] `GET /api/recents`, `POST /api/recents` (or update on session/new)
-- [ ] Sidebar: recent chips/list under Workspace
-- [ ] Clicking recent fills cwd and can start new session
-- [ ] Commit `feat: workspace recents in sidebar`
+- [x] `GET /api/recents`, `POST /api/recents` (or update on session/new)
+- [x] Sidebar: recent chips/list under Workspace
+- [x] Clicking recent fills cwd and can start new session
+- [x] Commit `feat: workspace recents in sidebar`
 
 ### Phase 3 exit criteria
 
-- [ ] Invalid path shows clear error on New session
-- [ ] After using a project, it appears in recents across restarts
+- [x] Invalid path shows clear error on New session
+- [x] After using a project, it appears in recents across restarts
 
 ---
 
@@ -449,6 +449,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **1 review fixes** | Per-tab sending, always park cancel bubble, mock yields + sticky queued cancel, bridge env, hadPending, re-cancel while busy |
 | 2026-07-16 | **2 complete** | Transcript store + API + History UI replay; v0.4.0; `~/.greg/sessions` |
 | 2026-07-16 | **2 review fixes** | Await shutdown flush, buffer-safe agent write, history race guard, no DELETE while live, thoughts, tool upsert, 0o700/0o600 |
+| 2026-07-16 | **3 complete** | resolveWorkspace + recents store/API/UI; v0.5.0 |
 
 ---
 
