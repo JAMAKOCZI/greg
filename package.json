@@ -1,0 +1,31 @@
+{
+  "name": "greg",
+  "version": "0.1.0",
+  "description": "Codex-style local web workspace for Grok Build (ACP)",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "greg": "./bin/greg.js"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "check": "node --check server.mjs && node --check lib/acp-bridge.mjs && node --check lib/http.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "grok",
+    "grok-build",
+    "acp",
+    "coding-agent",
+    "web-ui"
+  ],
+  "author": "JAMAKOCZI",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JAMAKOCZI/greg.git"
+  }
+}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Greg</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111114'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16' font-family='system-ui' fill='%23a78bfa'%3EG%3C/text%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="logo">G</span>
+          <div>
+            <div class="brand-name">Greg</div>
+            <div class="brand-sub">Grok Build desk</div>
+          </div>
+        </div>
+
+        <button type="button" id="btn-new" class="btn primary block">New session</button>
+
+        <div class="field">
+          <label for="cwd">Workspace</label>
+          <input id="cwd" type="text" spellcheck="false" autocomplete="off" />
+        </div>
+
+        <div class="field row">
+          <label class="check">
+            <input id="always-approve" type="checkbox" />
+            Auto-approve tools
+          </label>
+        </div>
+
+        <div class="sidebar-meta" id="meta">
+          <div class="muted">Starting…</div>
+        </div>
+
+        <div class="sidebar-foot muted">
+          Local only · ACP · Apache-2.0
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div id="status" class="status idle">
+            <span class="dot"></span>
+            <span id="status-text">Idle</span>
+          </div>
+          <div id="session-label" class="session-label muted">No session</div>
+        </header>
+
+        <section id="transcript" class="transcript" aria-live="polite"></section>
+
+        <footer class="composer">
+          <textarea
+            id="prompt"
+            rows="3"
+            placeholder="Message Greg… (Enter to send, Shift+Enter for newline)"
+            disabled
+          ></textarea>
+          <div class="composer-bar">
+            <span class="muted small" id="hint">Create a session to start</span>
+            <button type="button" id="btn-send" class="btn primary" disabled>Send</button>
+          </div>
+        </footer>
+      </main>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
