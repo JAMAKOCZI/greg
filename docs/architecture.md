@@ -43,6 +43,18 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 
 Step-by-step product plan: [superpowers/plans/2026-07-16-codex-quality-roadmap.md](superpowers/plans/2026-07-16-codex-quality-roadmap.md).
 
+## Durable transcripts (v0.4)
+
+Greg-owned history (not `~/.grok/sessions`):
+
+- Default root: `~/.greg/sessions/<id>.json` (override with `GREG_SESSIONS_DIR`)
+- Created on `POST /api/session/new` with `id = tabId`
+- Messages appended on user prompts; agent text flushed at turn end; tools/plans/permissions best-effort
+- API: `GET /api/history`, `GET /api/history/:id`, `DELETE /api/history/:id`
+- UI: sidebar **History** — read-only replay (composer disabled)
+
+Atomic writes: temp file + rename via `lib/transcript-store.mjs`.
+
 ## Cancel (v0.3)
 
 Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests):
@@ -65,7 +77,7 @@ Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests
 - [x] Multi-tab live sessions (in-process; concurrent `grok agent stdio`)
 - [x] Quality foundation (tests + mock agent + tab registry)
 - [x] Cancel / interrupt in-flight turn
-- [ ] Durable transcripts under `~/.greg/sessions` (Greg-owned)
+- [x] Durable transcripts under `~/.greg/sessions` (Greg-owned)
 - [ ] Multi-tab session history from `~/.grok/sessions` (optional import later)
 - [x] Manual vs auto-approve permission cards (wired end-to-end)
 - [ ] Project sidebar + workspace switcher (path field only for now)

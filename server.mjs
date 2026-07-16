@@ -13,13 +13,19 @@ import {
 } from "./lib/http.mjs";
 import { AcpBridge, newClientSessionId } from "./lib/acp-bridge.mjs";
 import { TabRegistry } from "./lib/tabs.mjs";
+import {
+  TranscriptStore,
+  defaultSessionsDir,
+} from "./lib/transcript-store.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
 const DEFAULT_CWD = process.env.GREG_CWD || process.cwd();
 const GROK_BIN = process.env.GROK_BIN || "grok";
+const SESSIONS_DIR = process.env.GREG_SESSIONS_DIR || defaultSessionsDir();
 
 const tabs = new TabRegistry();
+const transcripts = new TranscriptStore({ rootDir: SESSIONS_DIR });
 
 const bootstrapToken = newBootstrapToken();
 const sessionSecret = newSessionSecret();
@@ -31,9 +37,10 @@ const server = createGregServer({
     if (url.pathname === "/api/meta" && req.method === "GET") {
       json(res, 200, {
         name: "greg",
-        version: "0.3.0",
+        version: "0.4.0",
         grokBin: GROK_BIN,
         defaultCwd: DEFAULT_CWD,
+        sessionsDir: SESSIONS_DIR,
         platform: platform(),
       });
       return true;
@@ -42,6 +49,46 @@ const server = createGregServer({
     if (url.pathname === "/api/sessions" && req.method === "GET") {
       json(res, 200, { tabs: tabs.list() });
       return true;
+    }
+
+    // History (durable transcripts)
+    if (url.pathname === "/api/history" && req.method === "GET") {
+      try {
+        const list = await transcripts.list();
+        json(res, 200, { sessions: list, rootDir: SESSIONS_DIR });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    {
+      const m = url.pathname.match(/^\/api\/history\/([^/]+)$/);
+      if (m) {
+        const id = decodeURIComponent(m[1]);
+        if (req.method === "GET") {
+          try {
+            const doc = await transcripts.load(id);
+            if (!doc) {
+              json(res, 404, { error: "Unknown history session" });
+              return true;
+            }
+            json(res, 200, doc);
+          } catch (err) {
+            json(res, 400, { error: err.message || String(err) });
+          }
+          return true;
+        }
+        if (req.method === "DELETE") {
+          try {
+            await transcripts.delete(id);
+            json(res, 200, { ok: true });
+          } catch (err) {
+            json(res, 400, { error: err.message || String(err) });
+          }
+          return true;
+        }
+      }
     }
 
     // GET /api/session/:tabId
@@ -66,6 +113,7 @@ const server = createGregServer({
       const tabId = body.tabId || newClientSessionId();
       const existing = tabs.get(tabId);
       if (existing) {
+        await flushAgentBuffer(tabId, existing);
         existing.bridge.stop();
         endSse(existing);
         tabs.delete(tabId);
@@ -82,11 +130,22 @@ const server = createGregServer({
           ? body.title.trim()
           : null;
       const entry = tabs.create(tabId, { bridge, cwd, title });
+      entry.agentBuffer = "";
       wireBridge(tabId, entry);
 
       try {
         const result = await bridge.openSession({ cwd });
         tabs.touch(tabId);
+        try {
+          await transcripts.create({
+            id: tabId,
+            cwd,
+            title: entry.title,
+            createdAt: entry.createdAt,
+          });
+        } catch (persistErr) {
+          console.error("[greg] transcript create failed", persistErr);
+        }
         json(res, 200, {
           tabId,
           sessionId: bridge.sessionId,
@@ -121,6 +180,7 @@ const server = createGregServer({
         json(res, 404, { error: "Unknown tab" });
         return true;
       }
+      void transcripts.setTitle(body.tabId, entry.title).catch(() => {});
       json(res, 200, { ok: true, ...tabs.meta(body.tabId) });
       return true;
     }
@@ -138,10 +198,35 @@ const server = createGregServer({
         return true;
       }
       tabs.ensureTitleFromPrompt(body.tabId, text);
+      const title = entry.title;
+      try {
+        await transcripts.appendMessage(
+          body.tabId,
+          { role: "user", text },
+          { title },
+        );
+      } catch (persistErr) {
+        console.error("[greg] transcript user append failed", persistErr);
+      }
+
       try {
         // Fire and stream via SSE; resolve when turn completes
         const result = await entry.bridge.prompt(text);
         tabs.touch(body.tabId);
+        await flushAgentBuffer(body.tabId, entry);
+        if (result?.stopReason === "cancelled") {
+          try {
+            await transcripts.appendMessage(body.tabId, {
+              role: "system",
+              text: "Turn cancelled",
+            });
+          } catch {
+            /* ignore */
+          }
+        }
+        if (title) {
+          void transcripts.setTitle(body.tabId, title).catch(() => {});
+        }
         const meta = tabs.meta(body.tabId);
         json(res, 200, {
           ok: true,
@@ -150,6 +235,15 @@ const server = createGregServer({
           lastActiveAt: meta?.lastActiveAt ?? entry.lastActiveAt,
         });
       } catch (err) {
+        await flushAgentBuffer(body.tabId, entry);
+        try {
+          await transcripts.appendMessage(body.tabId, {
+            role: "system",
+            text: err.message || String(err),
+          });
+        } catch {
+          /* ignore */
+        }
         json(res, 502, { error: err.message || String(err) });
       }
       return true;
@@ -223,6 +317,7 @@ const server = createGregServer({
       const body = await readJson(req);
       const entry = tabs.get(body.tabId);
       if (entry) {
+        await flushAgentBuffer(body.tabId, entry);
         entry.bridge.stop();
         endSse(entry);
         tabs.delete(body.tabId);
@@ -251,7 +346,82 @@ function endSse(entry) {
 
 /**
  * @param {string} tabId
- * @param {import('./lib/tabs.mjs').TabEntry} entry
+ * @param {import('./lib/tabs.mjs').TabEntry & { agentBuffer?: string }} entry
+ */
+async function flushAgentBuffer(tabId, entry) {
+  const text = String(entry.agentBuffer || "").trim();
+  entry.agentBuffer = "";
+  if (!text) return;
+  try {
+    await transcripts.appendMessage(tabId, { role: "agent", text });
+  } catch (err) {
+    console.error("[greg] transcript agent flush failed", err);
+  }
+}
+
+/**
+ * @param {string} tabId
+ * @param {import('./lib/tabs.mjs').TabEntry & { agentBuffer?: string }} entry
+ * @param {object} msg
+ */
+function recordAcpForTranscript(tabId, entry, msg) {
+  if (msg.method !== "session/update" && msg.method !== "x.ai/session/update") {
+    return;
+  }
+  const params = msg.params || {};
+  const update = params.update || params.sessionUpdate || params;
+  const kind = update.sessionUpdate || update.type || update.kind;
+
+  if (kind === "agent_message_chunk" || kind === "agent_message") {
+    const chunk =
+      update.content?.text ||
+      update.text ||
+      update.message?.text ||
+      (typeof update.content === "string" ? update.content : "") ||
+      "";
+    if (chunk) entry.agentBuffer = (entry.agentBuffer || "") + chunk;
+    return;
+  }
+
+  if (kind === "tool_call" || kind === "tool_call_update") {
+    const title =
+      update.title || update.toolCallId || update.toolName || update.kind || "tool";
+    const status = update.status || "";
+    const text = `${title}${status ? ` · ${status}` : ""}`;
+    // Best-effort; don't block SSE
+    void transcripts
+      .appendMessage(tabId, {
+        role: "tool",
+        text,
+        meta: {
+          toolCallId: update.toolCallId || update.tool_call_id || null,
+          status: status || null,
+          kind: update.kind || null,
+        },
+      })
+      .catch(() => {});
+    return;
+  }
+
+  if (kind === "plan") {
+    const entries = update.entries || update.plan || [];
+    const text = Array.isArray(entries)
+      ? entries
+          .map((e) => `• ${e.content || e.title || JSON.stringify(e)}`)
+          .join("\n")
+      : JSON.stringify(entries);
+    void transcripts
+      .appendMessage(tabId, {
+        role: "plan",
+        text: text || "(plan)",
+      })
+      .catch(() => {});
+  }
+}
+
+/**
+ * @param {string} tabId
+ * @param {import('./lib/tabs.mjs').TabEntry & { agentBuffer?: string }} entry
  */
 function wireBridge(tabId, entry) {
   const { bridge } = entry;
@@ -266,13 +436,27 @@ function wireBridge(tabId, entry) {
     }
   };
 
-  bridge.on("notification", (msg) => push("acp", msg));
-  bridge.on("request", (msg) => push("acp-request", msg));
+  bridge.on("notification", (msg) => {
+    recordAcpForTranscript(tabId, entry, msg);
+    push("acp", msg);
+  });
+  bridge.on("request", (msg) => {
+    // Permission requests — lightweight system note
+    const method = msg.method || "request";
+    void transcripts
+      .appendMessage(tabId, {
+        role: "permission",
+        text: `Agent request: ${method}`,
+        meta: { id: msg.id ?? null, method },
+      })
+      .catch(() => {});
+    push("acp-request", msg);
+  });
   bridge.on("stderr", (text) => push("stderr", { text }));
   bridge.on("error", (err) => push("error", { message: err.message }));
   bridge.on("exit", (info) => {
-    // Keep tab until client stops it; refresh activity for list UI.
     tabs.touch(tabId);
+    void flushAgentBuffer(tabId, entry);
     push("exit", info);
   });
 }
@@ -286,6 +470,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  Open once:  ${url}`);
   console.log(`  Workspace:  ${DEFAULT_CWD}`);
   console.log(`  Grok bin:   ${GROK_BIN}`);
+  console.log(`  History:    ${SESSIONS_DIR}`);
   console.log("");
 
   if (!process.env.GREG_NO_OPEN) {
@@ -305,7 +490,8 @@ function openBrowser(url) {
 }
 
 function shutdown() {
-  for (const [, entry] of tabs.entries()) {
+  for (const [tabId, entry] of tabs.entries()) {
+    void flushAgentBuffer(tabId, entry);
     entry.bridge.stop();
   }
   server.close(() => process.exit(0));

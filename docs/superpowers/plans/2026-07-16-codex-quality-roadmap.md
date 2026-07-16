@@ -263,9 +263,9 @@ Store under **`~/.greg/sessions/<id>.json`** (Greg-owned). Do **not** depend on 
 - Create: `lib/transcript-store.mjs`
 - Create: `test/transcript-store.test.mjs` (use `os.tmpdir()` isolation)
 
-- [ ] `save`, `load`, `list`, `appendMessage`, `delete`
-- [ ] Atomic write (write temp + rename)
-- [ ] Commit `feat: greg-owned transcript store`
+- [x] `save`, `load`, `list`, `appendMessage`, `delete`
+- [x] Atomic write (write temp + rename)
+- [x] Commit `feat: greg-owned transcript store`
 
 #### Task 2.2 — Server hooks
 
@@ -276,21 +276,21 @@ Store under **`~/.greg/sessions/<id>.json`** (Greg-owned). Do **not** depend on 
   - `GET /api/history/:id` → full transcript
   - `DELETE /api/history/:id`
 - On prompt / agent chunks: append to in-memory buffer; flush on turn end and on stop
-- [ ] Commit `feat: persist transcripts on turn boundaries`
+- [x] Commit `feat: persist transcripts on turn boundaries`
 
 #### Task 2.3 — UI history
 
 **Files:**
 - Modify: sidebar — section “History” below live sessions
 - Opening history: show replay transcript; composer disabled or “Continue in new session” that seeds context (v1: **replay only** is enough for exit)
-- [ ] Commit `feat: browse and replay saved sessions`
+- [x] Commit `feat: browse and replay saved sessions`
 
 ### Phase 2 exit criteria
 
-- [ ] Kill Greg, restart, history list shows last chats
-- [ ] Replay renders user + agent text at minimum (tools best-effort)
-- [ ] Store tests pass with temp dir
-- [ ] Disk layout documented in architecture.md
+- [x] Kill Greg, restart, history list shows last chats
+- [x] Replay renders user + agent text at minimum (tools best-effort)
+- [x] Store tests pass with temp dir
+- [x] Disk layout documented in architecture.md
 
 ---
 
@@ -447,6 +447,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **0 review fixes** | Code review on Phase 0: unique mock tool ids, safe TabRegistry.create, endSse on open fail, fixture tests, MOCK_STREAM_MS, npm test glob, check covers mock (17 tests) |
 | 2026-07-16 | **1 complete** | `session/cancel` notification; bridge + mock + `/api/cancel` + Cancel/Ctrl+.; v0.3.0 |
 | 2026-07-16 | **1 review fixes** | Per-tab sending, always park cancel bubble, mock yields + sticky queued cancel, bridge env, hadPending, re-cancel while busy |
+| 2026-07-16 | **2 complete** | Transcript store + API + History UI replay; v0.4.0; `~/.greg/sessions` |
 
 ---
 

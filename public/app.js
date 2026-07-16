@@ -22,7 +22,12 @@ const els = {
   btnSidebarClose: $("btn-sidebar-close"),
   sidebarBackdrop: $("sidebar-backdrop"),
   sessionList: $("session-list"),
+  historyList: $("history-list"),
 };
+
+/** When set, main pane is a read-only history replay (not a live tab). */
+/** @type {string|null} */
+let historyViewId = null;
 
 /** @type {string|null} */
 let activeTabId = null;
@@ -900,18 +905,26 @@ function setCancelVisible(visible) {
 }
 
 /**
- * Switch UI to another tab.
+ * Switch UI to another live tab.
  * @param {string} tabId
  */
 function switchToTab(tabId) {
-  if (tabId === activeTabId) return;
+  if (tabId === activeTabId && !historyViewId) return;
   const next = tabStates.get(tabId);
   if (!next) return;
 
+  // Leaving history replay
+  historyViewId = null;
+
   const prev = activeState();
-  if (prev) {
+  if (prev && activeTabId) {
     prev.draft = els.prompt.value;
     parkActiveTranscript(prev);
+  } else {
+    // Clear replay messages from transcript
+    for (const child of [...els.transcript.children]) {
+      if (child !== els.emptyState) child.remove();
+    }
   }
 
   activeTabId = tabId;
@@ -930,7 +943,189 @@ function switchToTab(tabId) {
     setStatus("idle", "Disconnected");
   }
   renderSessionList();
+  renderHistoryList();
   if (next.alive) els.prompt.focus();
+}
+
+/**
+ * Open a saved transcript as read-only replay (composer disabled).
+ * @param {string} id
+ */
+async function openHistory(id) {
+  // Park live tab transcript if any
+  const prev = activeState();
+  if (prev && !historyViewId) {
+    prev.draft = els.prompt.value;
+    parkActiveTranscript(prev);
+  }
+
+  historyViewId = id;
+  activeTabId = null;
+
+  for (const child of [...els.transcript.children]) {
+    if (child !== els.emptyState) child.remove();
+  }
+  els.transcript.classList.remove("has-messages");
+  els.prompt.value = "";
+  setStopEnabled(false);
+  setComposerEnabled(false);
+  setStatus("idle", "History");
+  els.hint.textContent = "Read-only replay · New session to continue working";
+
+  try {
+    const doc = await api(`/api/history/${encodeURIComponent(id)}`);
+    els.sessionLabel.textContent = doc.title
+      ? `history · ${doc.title}`
+      : `history · ${shortId(id)}`;
+    if (doc.cwd) els.cwd.value = doc.cwd;
+
+    renderHistoryMessage({
+      role: "system",
+      text: `Replay · ${doc.cwd || "—"}${doc.messages?.length ? ` · ${doc.messages.length} messages` : ""}`,
+    });
+    for (const m of doc.messages || []) {
+      renderHistoryMessage(m);
+    }
+    markTranscriptFilled();
+    scrollTranscript();
+  } catch (e) {
+    const div = document.createElement("div");
+    div.className = "bubble system";
+    div.textContent = `Failed to load history: ${e.message}`;
+    els.transcript.appendChild(div);
+    markTranscriptFilled();
+  }
+
+  renderSessionList();
+  renderHistoryList();
+  closeSidebar();
+}
+
+/**
+ * @param {{ role: string, text: string, ts?: number, meta?: object }} m
+ */
+function renderHistoryMessage(m) {
+  const role = m.role || "system";
+  const text = m.text || "";
+  if (role === "user") {
+    const div = document.createElement("div");
+    div.className = "bubble user";
+    const r = document.createElement("span");
+    r.className = "role";
+    r.textContent = "you";
+    div.appendChild(r);
+    div.appendChild(document.createTextNode(text));
+    els.transcript.appendChild(div);
+    return;
+  }
+  if (role === "agent") {
+    const div = document.createElement("div");
+    div.className = "bubble agent";
+    const r = document.createElement("span");
+    r.className = "role";
+    r.textContent = "greg";
+    div.appendChild(r);
+    div.appendChild(document.createTextNode(text));
+    els.transcript.appendChild(div);
+    return;
+  }
+  if (role === "tool" || role === "plan") {
+    const div = document.createElement("div");
+    div.className = "bubble tool";
+    const r = document.createElement("span");
+    r.className = "role";
+    r.textContent = role;
+    div.appendChild(r);
+    div.appendChild(document.createTextNode(text));
+    els.transcript.appendChild(div);
+    return;
+  }
+  if (role === "permission") {
+    const div = document.createElement("div");
+    div.className = "bubble system";
+    div.appendChild(document.createTextNode(text));
+    els.transcript.appendChild(div);
+    return;
+  }
+  const div = document.createElement("div");
+  div.className = "bubble system";
+  div.appendChild(document.createTextNode(text));
+  els.transcript.appendChild(div);
+}
+
+async function loadHistoryList() {
+  try {
+    const data = await api("/api/history");
+    return data.sessions || [];
+  } catch {
+    return [];
+  }
+}
+
+/** @type {Array<{id:string,title:string|null,cwd:string,cwdBase:string,updatedAt:number,messageCount:number}>} */
+let historyCache = [];
+
+async function refreshHistory() {
+  historyCache = await loadHistoryList();
+  renderHistoryList();
+}
+
+function renderHistoryList() {
+  if (!els.historyList) return;
+  els.historyList.innerHTML = "";
+
+  // Hide live sessions that are still open from history noise (same id)
+  const liveIds = new Set(tabStates.keys());
+
+  for (const item of historyCache) {
+    // Still show live ones as history too so after stop they remain; prefer showing all
+    const row = document.createElement("div");
+    row.className = "history-item";
+    if (historyViewId === item.id) row.classList.add("active");
+    if (liveIds.has(item.id)) row.classList.add("live");
+
+    const pick = document.createElement("button");
+    pick.type = "button";
+    pick.className = "history-pick";
+    const title = item.title || item.cwdBase || shortId(item.id);
+    pick.innerHTML = `
+      <span class="history-title">${escapeHtml(title)}</span>
+      <span class="history-sub">${escapeHtml(item.cwdBase || "")} · ${item.messageCount || 0} msgs · ${escapeHtml(shortId(item.id))}</span>
+    `;
+    pick.addEventListener("click", () => openHistory(item.id));
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "btn icon history-delete";
+    del.title = "Delete from history";
+    del.setAttribute("aria-label", "Delete from history");
+    del.textContent = "×";
+    del.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      try {
+        await api(`/api/history/${encodeURIComponent(item.id)}`, {
+          method: "DELETE",
+        });
+        if (historyViewId === item.id) {
+          historyViewId = null;
+          for (const child of [...els.transcript.children]) {
+            if (child !== els.emptyState) child.remove();
+          }
+          els.transcript.classList.remove("has-messages");
+          updateSessionLabel(null);
+          setStatus("idle", "Idle");
+          setComposerEnabled(false);
+        }
+        await refreshHistory();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    row.appendChild(pick);
+    row.appendChild(del);
+    els.historyList.appendChild(row);
+  }
 }
 
 async function newSession() {
@@ -941,7 +1136,7 @@ async function newSession() {
 
   // Park current tab; do not stop it
   const prev = activeState();
-  if (prev) {
+  if (prev && !historyViewId) {
     prev.draft = els.prompt.value;
     parkActiveTranscript(prev);
   }
@@ -951,6 +1146,7 @@ async function newSession() {
     if (child !== els.emptyState) child.remove();
   }
   els.transcript.classList.remove("has-messages");
+  historyViewId = null;
   activeTabId = null;
   els.prompt.value = "";
 
@@ -986,6 +1182,7 @@ async function newSession() {
     setComposerEnabled(true);
     setStopEnabled(true);
     renderSessionList();
+    void refreshHistory();
     els.prompt.focus();
   } catch (e) {
     setStatus("error", "Failed");
@@ -1122,6 +1319,7 @@ async function sendPrompt() {
     st.sending = false;
     st.cancelHttpInflight = false;
     renderSessionList();
+    void refreshHistory();
     if (st.tabId === activeTabId) {
       refreshActiveComposer();
       if (st.alive) els.prompt.focus();
@@ -1290,6 +1488,7 @@ if (els.sidebarBackdrop) {
 
 loadMeta();
 hydrateSessions();
+void refreshHistory();
 setStatus("idle", "Idle");
 setStopEnabled(false);
 setComposerEnabled(false);

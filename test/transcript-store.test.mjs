@@ -108,4 +108,20 @@ describe("TranscriptStore", () => {
       null,
     );
   });
+
+  it("serializes concurrent appendMessage without corruption", async () => {
+    await store.create({ id: "race", cwd: "/r" });
+    const n = 40;
+    await Promise.all(
+      Array.from({ length: n }, (_, i) =>
+        store.appendMessage("race", { role: "system", text: `m${i}` }),
+      ),
+    );
+    const doc = await store.load("race");
+    assert.ok(doc);
+    assert.equal(doc.messages.length, n);
+    // File must parse as a single JSON value (no concat garbage)
+    const raw = await readFile(join(root, "race.json"), "utf8");
+    JSON.parse(raw);
+  });
 });

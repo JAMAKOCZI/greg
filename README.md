@@ -8,7 +8,7 @@ Greg is a browser UI that runs on your machine and talks to the official `grok` 
 
 ## Status
 
-Early (`0.3.0`). Multi-session desk, permission cards, tool/diff/plan cards, and **cancel turn** (`Ctrl+.` / Cancel button) over ACP. Phase 0 foundation: `npm test`, mock agent. Disk session history and workspace switcher still to come.
+Early (`0.4.0`). Multi-session desk, cancel turn, tool/diff/plan cards, and **durable history** under `~/.greg/sessions` (sidebar replay). Workspace switcher still to come.
 
 ## Requirements
 
@@ -45,6 +45,7 @@ Open it in your browser. The server binds to **localhost only**.
 | `GROK_BIN`   | `grok`  | Path to Grok Build binary        |
 | `GREG_CWD`   | cwd     | Initial workspace for new sessions |
 | `GREG_NO_OPEN` | unset | Set to `1` to skip opening a browser |
+| `GREG_SESSIONS_DIR` | `~/.greg/sessions` | Where Greg stores durable chat transcripts |
 
 ## Architecture
 
