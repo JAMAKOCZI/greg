@@ -28,5 +28,25 @@
     "mtime": 1784240494.7759516,
     "ast_hash": "d3a0cd0798c7eea7ab7e6388db364f95",
     "semantic_hash": "d3a0cd0798c7eea7ab7e6388db364f95"
+  },
+  "AGENTS.md": {
+    "mtime": 1784241003.9907415,
+    "ast_hash": "ba0f16aefd240a24e237209dabef1eaf",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1784241013.1250823,
+    "ast_hash": "19ad9d9202167ba4cf33135150406f5d",
+    "semantic_hash": ""
+  },
+  "docs/architecture.md": {
+    "mtime": 1784240494.7759516,
+    "ast_hash": "ab89284fac2d90fc09ad1902a9f4985c",
+    "semantic_hash": ""
+  },
+  "public/index.html": {
+    "mtime": 1784240525.7842813,
+    "ast_hash": "7cabc1f84c081d313ef4ae9a93334174",
+    "semantic_hash": ""
   }
 }

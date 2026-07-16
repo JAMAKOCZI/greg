@@ -4,6 +4,204 @@
   "graph": {},
   "nodes": [
     {
+      "label": "AGENTS.md",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "agents",
+      "community": 7,
+      "community_name": "Greg \u2014 agent notes",
+      "norm_label": "agents.md"
+    },
+    {
+      "label": "Greg \u2014 agent notes",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "agents_greg_agent_notes",
+      "community": 7,
+      "community_name": "Greg \u2014 agent notes",
+      "norm_label": "greg \u2014 agent notes"
+    },
+    {
+      "label": "What this is",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "L3",
+      "_origin": "ast",
+      "id": "agents_what_this_is",
+      "community": 7,
+      "community_name": "Greg \u2014 agent notes",
+      "norm_label": "what this is"
+    },
+    {
+      "label": "Stack",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "L7",
+      "_origin": "ast",
+      "id": "agents_stack",
+      "community": 7,
+      "community_name": "Greg \u2014 agent notes",
+      "norm_label": "stack"
+    },
+    {
+      "label": "Conventions",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "L12",
+      "_origin": "ast",
+      "id": "agents_conventions",
+      "community": 7,
+      "community_name": "Greg \u2014 agent notes",
+      "norm_label": "conventions"
+    },
+    {
+      "label": "Useful commands",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "L19",
+      "_origin": "ast",
+      "id": "agents_useful_commands",
+      "community": 7,
+      "community_name": "Greg \u2014 agent notes",
+      "norm_label": "useful commands"
+    },
+    {
+      "label": "Upstream reference",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "L27",
+      "_origin": "ast",
+      "id": "agents_upstream_reference",
+      "community": 7,
+      "community_name": "Greg \u2014 agent notes",
+      "norm_label": "upstream reference"
+    },
+    {
+      "label": "graphify",
+      "file_type": "document",
+      "source_file": "AGENTS.md",
+      "source_location": "L31",
+      "_origin": "ast",
+      "id": "agents_graphify",
+      "community": 7,
+      "community_name": "Greg \u2014 agent notes",
+      "norm_label": "graphify"
+    },
+    {
+      "label": "README.md",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "readme",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "readme.md"
+    },
+    {
+      "label": "Greg",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "readme_greg",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "greg"
+    },
+    {
+      "label": "Status",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L9",
+      "_origin": "ast",
+      "id": "readme_status",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "status"
+    },
+    {
+      "label": "Requirements",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L13",
+      "_origin": "ast",
+      "id": "readme_requirements",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "requirements"
+    },
+    {
+      "label": "Quick start",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L24",
+      "_origin": "ast",
+      "id": "readme_quick_start",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "quick start"
+    },
+    {
+      "label": "Environment",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L40",
+      "_origin": "ast",
+      "id": "readme_environment",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "environment"
+    },
+    {
+      "label": "Architecture",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L49",
+      "_origin": "ast",
+      "id": "readme_architecture",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "architecture"
+    },
+    {
+      "label": "Development",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L60",
+      "_origin": "ast",
+      "id": "readme_development",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "development"
+    },
+    {
+      "label": "Knowledge graph (graphify)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L67",
+      "_origin": "ast",
+      "id": "readme_knowledge_graph_graphify",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "knowledge graph (graphify)"
+    },
+    {
+      "label": "License",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L82",
+      "_origin": "ast",
+      "id": "readme_license",
+      "community": 4,
+      "community_name": "Community 4",
+      "norm_label": "license"
+    },
+    {
       "label": "greg.js",
       "file_type": "code",
       "source_file": "bin/greg.js",
@@ -11,8 +209,8 @@
       "_origin": "ast",
       "community": 6,
       "norm_label": "greg.js",
-      "id": "bin_greg",
-      "community_name": "Community 6"
+      "community_name": "Community 6",
+      "id": "bin_greg"
     },
     {
       "label": "root",
@@ -22,8 +220,8 @@
       "_origin": "ast",
       "community": 6,
       "norm_label": "root",
-      "id": "bin_greg_root",
-      "community_name": "Community 6"
+      "community_name": "Community 6",
+      "id": "bin_greg_root"
     },
     {
       "label": "acp-bridge.mjs",
@@ -31,10 +229,10 @@
       "source_file": "lib/acp-bridge.mjs",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "acp-bridge.mjs",
-      "id": "lib_acp_bridge",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "lib_acp_bridge"
     },
     {
       "label": "AcpBridge",
@@ -44,8 +242,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "acpbridge",
-      "id": "lib_acp_bridge_acpbridge",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge"
     },
     {
       "label": ".constructor()",
@@ -55,8 +253,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".constructor()",
-      "id": "lib_acp_bridge_acpbridge_constructor",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_constructor"
     },
     {
       "label": ".start()",
@@ -66,8 +264,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".start()",
-      "id": "lib_acp_bridge_acpbridge_start",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_start"
     },
     {
       "label": ".stop()",
@@ -77,8 +275,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".stop()",
-      "id": "lib_acp_bridge_acpbridge_stop",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_stop"
     },
     {
       "label": ".openSession()",
@@ -88,8 +286,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".opensession()",
-      "id": "lib_acp_bridge_acpbridge_opensession",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_opensession"
     },
     {
       "label": ".prompt()",
@@ -99,8 +297,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".prompt()",
-      "id": "lib_acp_bridge_acpbridge_prompt",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_prompt"
     },
     {
       "label": ".respond()",
@@ -110,8 +308,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".respond()",
-      "id": "lib_acp_bridge_acpbridge_respond",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_respond"
     },
     {
       "label": ".respondError()",
@@ -121,8 +319,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".responderror()",
-      "id": "lib_acp_bridge_acpbridge_responderror",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_responderror"
     },
     {
       "label": ".request()",
@@ -132,8 +330,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".request()",
-      "id": "lib_acp_bridge_acpbridge_request",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_request"
     },
     {
       "label": ".notify()",
@@ -143,8 +341,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".notify()",
-      "id": "lib_acp_bridge_acpbridge_notify",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_notify"
     },
     {
       "label": ".#write()",
@@ -154,8 +352,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".#write()",
-      "id": "lib_acp_bridge_acpbridge_write",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_write"
     },
     {
       "label": ".#onLine()",
@@ -165,8 +363,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".#online()",
-      "id": "lib_acp_bridge_acpbridge_online",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_online"
     },
     {
       "label": ".#rejectAll()",
@@ -176,8 +374,8 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".#rejectall()",
-      "id": "lib_acp_bridge_acpbridge_rejectall",
-      "community_name": "Community 3"
+      "community_name": "Community 3",
+      "id": "lib_acp_bridge_acpbridge_rejectall"
     },
     {
       "label": "newClientSessionId()",
@@ -185,10 +383,10 @@
       "source_file": "lib/acp-bridge.mjs",
       "source_location": "L241",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "newclientsessionid()",
-      "id": "lib_acp_bridge_newclientsessionid",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "lib_acp_bridge_newclientsessionid"
     },
     {
       "label": "http.mjs",
@@ -198,8 +396,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "http.mjs",
-      "id": "lib_http",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http"
     },
     {
       "label": "__dirname",
@@ -209,8 +407,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "__dirname",
-      "id": "lib_http_dirname",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_dirname"
     },
     {
       "label": "PUBLIC_DIR",
@@ -220,8 +418,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "public_dir",
-      "id": "lib_http_public_dir",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_public_dir"
     },
     {
       "label": "MIME",
@@ -231,8 +429,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "mime",
-      "id": "lib_http_mime",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_mime"
     },
     {
       "label": "newBootstrapToken()",
@@ -242,8 +440,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "newbootstraptoken()",
-      "id": "lib_http_newbootstraptoken",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_newbootstraptoken"
     },
     {
       "label": "newSessionSecret()",
@@ -253,8 +451,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "newsessionsecret()",
-      "id": "lib_http_newsessionsecret",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_newsessionsecret"
     },
     {
       "label": "createGregServer()",
@@ -264,8 +462,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "creategregserver()",
-      "id": "lib_http_creategregserver",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_creategregserver"
     },
     {
       "label": "isLocalHost()",
@@ -275,8 +473,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "islocalhost()",
-      "id": "lib_http_islocalhost",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_islocalhost"
     },
     {
       "label": "setSecurityHeaders()",
@@ -286,8 +484,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "setsecurityheaders()",
-      "id": "lib_http_setsecurityheaders",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_setsecurityheaders"
     },
     {
       "label": "cookie()",
@@ -297,8 +495,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "cookie()",
-      "id": "lib_http_cookie",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_cookie"
     },
     {
       "label": "parseCookie()",
@@ -308,8 +506,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "parsecookie()",
-      "id": "lib_http_parsecookie",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_parsecookie"
     },
     {
       "label": "json()",
@@ -319,8 +517,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "json()",
-      "id": "lib_http_json",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_json"
     },
     {
       "label": "readJson()",
@@ -330,8 +528,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "readjson()",
-      "id": "lib_http_readjson",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_readjson"
     },
     {
       "label": "serveStatic()",
@@ -341,8 +539,8 @@
       "_origin": "ast",
       "community": 2,
       "norm_label": "servestatic()",
-      "id": "lib_http_servestatic",
-      "community_name": "Community 2"
+      "community_name": "Community 2",
+      "id": "lib_http_servestatic"
     },
     {
       "label": "package.json",
@@ -352,8 +550,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "package.json",
-      "id": "package",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package"
     },
     {
       "label": "name",
@@ -363,8 +561,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "name",
-      "id": "package_name",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_name"
     },
     {
       "label": "version",
@@ -374,8 +572,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "version",
-      "id": "package_version",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_version"
     },
     {
       "label": "description",
@@ -385,8 +583,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "description",
-      "id": "package_description",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_description"
     },
     {
       "label": "type",
@@ -396,8 +594,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "type",
-      "id": "package_type",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_type"
     },
     {
       "label": "private",
@@ -407,8 +605,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "private",
-      "id": "package_private",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_private"
     },
     {
       "label": "bin",
@@ -418,8 +616,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "bin",
-      "id": "package_bin",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_bin"
     },
     {
       "label": "greg",
@@ -429,8 +627,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "greg",
-      "id": "package_bin_greg",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_bin_greg"
     },
     {
       "label": "scripts",
@@ -440,8 +638,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "scripts",
-      "id": "package_scripts",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_scripts"
     },
     {
       "label": "start",
@@ -451,8 +649,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "start",
-      "id": "package_scripts_start",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_scripts_start"
     },
     {
       "label": "dev",
@@ -462,8 +660,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "dev",
-      "id": "package_scripts_dev",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_scripts_dev"
     },
     {
       "label": "check",
@@ -473,8 +671,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "check",
-      "id": "package_scripts_check",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_scripts_check"
     },
     {
       "label": "engines",
@@ -484,8 +682,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "engines",
-      "id": "package_engines",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_engines"
     },
     {
       "label": "node",
@@ -495,8 +693,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "node",
-      "id": "package_engines_node",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_engines_node"
     },
     {
       "label": "keywords",
@@ -506,8 +704,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "keywords",
-      "id": "package_keywords",
-      "community_name": "Community 5"
+      "community_name": "Community 5",
+      "id": "package_keywords"
     },
     {
       "label": "grok",
@@ -517,8 +715,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "grok",
-      "id": "ref_grok",
-      "community_name": "Community 5"
+      "community_name": "Community 5",
+      "id": "ref_grok"
     },
     {
       "label": "grok-build",
@@ -528,8 +726,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "grok-build",
-      "id": "ref_grok_build",
-      "community_name": "Community 5"
+      "community_name": "Community 5",
+      "id": "ref_grok_build"
     },
     {
       "label": "acp",
@@ -539,8 +737,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "acp",
-      "id": "ref_acp",
-      "community_name": "Community 5"
+      "community_name": "Community 5",
+      "id": "ref_acp"
     },
     {
       "label": "coding-agent",
@@ -550,8 +748,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "coding-agent",
-      "id": "ref_coding_agent",
-      "community_name": "Community 5"
+      "community_name": "Community 5",
+      "id": "ref_coding_agent"
     },
     {
       "label": "web-ui",
@@ -561,8 +759,8 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "web-ui",
-      "id": "ref_web_ui",
-      "community_name": "Community 5"
+      "community_name": "Community 5",
+      "id": "ref_web_ui"
     },
     {
       "label": "author",
@@ -572,8 +770,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "author",
-      "id": "package_author",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_author"
     },
     {
       "label": "license",
@@ -583,8 +781,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "license",
-      "id": "package_license",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_license"
     },
     {
       "label": "repository",
@@ -594,8 +792,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "repository",
-      "id": "package_repository",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_repository"
     },
     {
       "label": "type",
@@ -605,8 +803,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "type",
-      "id": "package_repository_type",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_repository_type"
     },
     {
       "label": "url",
@@ -616,8 +814,8 @@
       "_origin": "ast",
       "community": 0,
       "norm_label": "url",
-      "id": "package_repository_url",
-      "community_name": "Community 0"
+      "community_name": "Community 0",
+      "id": "package_repository_url"
     },
     {
       "label": "app.js",
@@ -627,8 +825,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "app.js",
-      "id": "public_app",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app"
     },
     {
       "label": "els",
@@ -638,8 +836,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "els",
-      "id": "public_app_els",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_els"
     },
     {
       "label": "setStatus()",
@@ -649,8 +847,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "setstatus()",
-      "id": "public_app_setstatus",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_setstatus"
     },
     {
       "label": "appendBubble()",
@@ -660,8 +858,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "appendbubble()",
-      "id": "public_app_appendbubble",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_appendbubble"
     },
     {
       "label": "appendToLive()",
@@ -671,8 +869,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "appendtolive()",
-      "id": "public_app_appendtolive",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_appendtolive"
     },
     {
       "label": "resetLive()",
@@ -682,8 +880,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "resetlive()",
-      "id": "public_app_resetlive",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_resetlive"
     },
     {
       "label": "api()",
@@ -693,8 +891,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "api()",
-      "id": "public_app_api",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_api"
     },
     {
       "label": "loadMeta()",
@@ -704,8 +902,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "loadmeta()",
-      "id": "public_app_loadmeta",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_loadmeta"
     },
     {
       "label": "escapeHtml()",
@@ -715,8 +913,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "escapehtml()",
-      "id": "public_app_escapehtml",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_escapehtml"
     },
     {
       "label": "connectStream()",
@@ -726,8 +924,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "connectstream()",
-      "id": "public_app_connectstream",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_connectstream"
     },
     {
       "label": "handleAcp()",
@@ -737,8 +935,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "handleacp()",
-      "id": "public_app_handleacp",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_handleacp"
     },
     {
       "label": "handleAcpRequest()",
@@ -748,8 +946,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "handleacprequest()",
-      "id": "public_app_handleacprequest",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_handleacprequest"
     },
     {
       "label": "setComposerEnabled()",
@@ -759,8 +957,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "setcomposerenabled()",
-      "id": "public_app_setcomposerenabled",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_setcomposerenabled"
     },
     {
       "label": "newSession()",
@@ -770,8 +968,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "newsession()",
-      "id": "public_app_newsession",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_newsession"
     },
     {
       "label": "sendPrompt()",
@@ -781,8 +979,8 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "sendprompt()",
-      "id": "public_app_sendprompt",
-      "community_name": "Community 1"
+      "community_name": "Community 1",
+      "id": "public_app_sendprompt"
     },
     {
       "label": "server.mjs",
@@ -790,10 +988,10 @@
       "source_file": "server.mjs",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "server.mjs",
-      "id": "server",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "server"
     },
     {
       "label": "PORT",
@@ -801,10 +999,10 @@
       "source_file": "server.mjs",
       "source_location": "L16",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "port",
-      "id": "server_port",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "server_port"
     },
     {
       "label": "tabs",
@@ -812,10 +1010,10 @@
       "source_file": "server.mjs",
       "source_location": "L22",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "tabs",
-      "id": "server_tabs",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "server_tabs"
     },
     {
       "label": "bootstrapToken",
@@ -823,10 +1021,10 @@
       "source_file": "server.mjs",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "bootstraptoken",
-      "id": "server_bootstraptoken",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "server_bootstraptoken"
     },
     {
       "label": "sessionSecret",
@@ -834,10 +1032,10 @@
       "source_file": "server.mjs",
       "source_location": "L25",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "sessionsecret",
-      "id": "server_sessionsecret",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "server_sessionsecret"
     },
     {
       "label": "server",
@@ -845,10 +1043,10 @@
       "source_file": "server.mjs",
       "source_location": "L27",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "server",
-      "id": "server_server",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "server_server"
     },
     {
       "label": "wireBridge()",
@@ -856,10 +1054,10 @@
       "source_file": "server.mjs",
       "source_location": "L161",
       "_origin": "ast",
-      "community": 4,
+      "community": 3,
       "norm_label": "wirebridge()",
-      "id": "server_wirebridge",
-      "community_name": "Community 4"
+      "community_name": "Community 3",
+      "id": "server_wirebridge"
     },
     {
       "label": "openBrowser()",
@@ -867,10 +1065,10 @@
       "source_file": "server.mjs",
       "source_location": "L197",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "openbrowser()",
-      "id": "server_openbrowser",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "server_openbrowser"
     },
     {
       "label": "shutdown()",
@@ -878,13 +1076,189 @@
       "source_file": "server.mjs",
       "source_location": "L208",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "shutdown()",
-      "id": "server_shutdown",
-      "community_name": "Community 4"
+      "community_name": "Community 2",
+      "id": "server_shutdown"
     }
   ],
   "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "agents",
+      "target": "agents_greg_agent_notes",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L12",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "agents_greg_agent_notes",
+      "target": "agents_conventions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L31",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "agents_greg_agent_notes",
+      "target": "agents_graphify",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "agents_greg_agent_notes",
+      "target": "agents_stack",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L27",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "agents_greg_agent_notes",
+      "target": "agents_upstream_reference",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L19",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "agents_greg_agent_notes",
+      "target": "agents_useful_commands",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "AGENTS.md",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "agents_greg_agent_notes",
+      "target": "agents_what_this_is",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "readme",
+      "target": "readme_greg",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L49",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "readme_greg",
+      "target": "readme_architecture",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L60",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "readme_greg",
+      "target": "readme_development",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L82",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "readme_greg",
+      "target": "readme_license",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L24",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "readme_greg",
+      "target": "readme_quick_start",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L13",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "readme_greg",
+      "target": "readme_requirements",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "readme_greg",
+      "target": "readme_status",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L40",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "readme_quick_start",
+      "target": "readme_environment",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L67",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "readme_development",
+      "target": "readme_knowledge_graph_graphify",
+      "confidence_score": 1.0
+    },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
@@ -2283,5 +2657,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "557eaf87b87a557a2de702781baba2a5237ef206"
+  "built_at_commit": "1e6936e3458da1f200f50e906f092017030a19f0"
 }
