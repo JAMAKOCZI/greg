@@ -32,6 +32,7 @@ coverage/
 .greg/
 *.local.json
 
-# Graphify / caches
-graphify-out/
+# Graphify — keep graph artifacts, skip machine-local cache/internals
+graphify-out/cache/
+graphify-out/.graphify_*
 .cache/

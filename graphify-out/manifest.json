@@ -1,0 +1,32 @@
+{
+  "bin/greg.js": {
+    "mtime": 1784240494.7759516,
+    "ast_hash": "61f2da4f615c34b33135fe5db05eba4a",
+    "semantic_hash": "61f2da4f615c34b33135fe5db05eba4a"
+  },
+  "lib/acp-bridge.mjs": {
+    "mtime": 1784240494.7759516,
+    "ast_hash": "347a4364041639eabae1a7dcb305c418",
+    "semantic_hash": "347a4364041639eabae1a7dcb305c418"
+  },
+  "lib/http.mjs": {
+    "mtime": 1784240494.7759516,
+    "ast_hash": "dcfdbb0491f418be91ff5b89a879e66d",
+    "semantic_hash": "dcfdbb0491f418be91ff5b89a879e66d"
+  },
+  "package.json": {
+    "mtime": 1784240457.3645597,
+    "ast_hash": "13b1f9b1698987e2b38865df1810fa1b",
+    "semantic_hash": "13b1f9b1698987e2b38865df1810fa1b"
+  },
+  "public/app.js": {
+    "mtime": 1784240525.7842813,
+    "ast_hash": "2d1446767b6b19e217d705ae0af2c12d",
+    "semantic_hash": "2d1446767b6b19e217d705ae0af2c12d"
+  },
+  "server.mjs": {
+    "mtime": 1784240494.7759516,
+    "ast_hash": "d3a0cd0798c7eea7ab7e6388db364f95",
+    "semantic_hash": "d3a0cd0798c7eea7ab7e6388db364f95"
+  }
+}

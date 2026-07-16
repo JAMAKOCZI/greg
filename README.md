@@ -64,6 +64,21 @@ npm run dev      # restart on file changes
 npm run check    # syntax check
 ```
 
+### Knowledge graph (graphify)
+
+Greg keeps a code knowledge graph in `graphify-out/` (used by agents for architecture Q&A).
+
+```sh
+# After clone (once per machine)
+graphify hook install          # post-commit / post-checkout auto-update
+graphify extract . --code-only # full rebuild if graph is missing
+
+# Manual refresh (AST only, no API key)
+graphify update .
+```
+
+After each `git commit`, the hook re-extracts changed code files and refreshes `graph.json` + `GRAPH_REPORT.md`.
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
