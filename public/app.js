@@ -28,6 +28,10 @@ const els = {
 /** When set, main pane is a read-only history replay (not a live tab). */
 /** @type {string|null} */
 let historyViewId = null;
+/** Monotonic generation to ignore stale openHistory responses. */
+let historyLoadGen = 0;
+/** Throttle disk history refresh (not every prompt). */
+let historyRefreshTimer = null;
 
 /** @type {string|null} */
 let activeTabId = null;
@@ -952,6 +956,8 @@ function switchToTab(tabId) {
  * @param {string} id
  */
 async function openHistory(id) {
+  const gen = ++historyLoadGen;
+
   // Park live tab transcript if any
   const prev = activeState();
   if (prev && !historyViewId) {
@@ -971,13 +977,23 @@ async function openHistory(id) {
   setComposerEnabled(false);
   setStatus("idle", "History");
   els.hint.textContent = "Read-only replay · New session to continue working";
+  renderSessionList();
+  renderHistoryList();
+  closeSidebar();
 
   try {
     const doc = await api(`/api/history/${encodeURIComponent(id)}`);
+    // Stale response after a newer click
+    if (gen !== historyLoadGen || historyViewId !== id) return;
+
     els.sessionLabel.textContent = doc.title
       ? `history · ${doc.title}`
       : `history · ${shortId(id)}`;
     if (doc.cwd) els.cwd.value = doc.cwd;
+
+    for (const child of [...els.transcript.children]) {
+      if (child !== els.emptyState) child.remove();
+    }
 
     renderHistoryMessage({
       role: "system",
@@ -989,16 +1005,13 @@ async function openHistory(id) {
     markTranscriptFilled();
     scrollTranscript();
   } catch (e) {
+    if (gen !== historyLoadGen || historyViewId !== id) return;
     const div = document.createElement("div");
     div.className = "bubble system";
     div.textContent = `Failed to load history: ${e.message}`;
     els.transcript.appendChild(div);
     markTranscriptFilled();
   }
-
-  renderSessionList();
-  renderHistoryList();
-  closeSidebar();
 }
 
 /**
@@ -1024,6 +1037,17 @@ function renderHistoryMessage(m) {
     const r = document.createElement("span");
     r.className = "role";
     r.textContent = "greg";
+    div.appendChild(r);
+    div.appendChild(document.createTextNode(text));
+    els.transcript.appendChild(div);
+    return;
+  }
+  if (role === "thought") {
+    const div = document.createElement("div");
+    div.className = "bubble thought";
+    const r = document.createElement("span");
+    r.className = "role";
+    r.textContent = "thinking";
     div.appendChild(r);
     div.appendChild(document.createTextNode(text));
     els.transcript.appendChild(div);
@@ -1070,6 +1094,15 @@ async function refreshHistory() {
   renderHistoryList();
 }
 
+/** Debounced refresh — avoid full list reload after every prompt. */
+function scheduleHistoryRefresh(ms = 800) {
+  if (historyRefreshTimer) clearTimeout(historyRefreshTimer);
+  historyRefreshTimer = setTimeout(() => {
+    historyRefreshTimer = null;
+    void refreshHistory();
+  }, ms);
+}
+
 function renderHistoryList() {
   if (!els.historyList) return;
   els.historyList.innerHTML = "";
@@ -1102,6 +1135,10 @@ function renderHistoryList() {
     del.textContent = "×";
     del.addEventListener("click", async (e) => {
       e.stopPropagation();
+      const label = item.title || item.cwdBase || shortId(item.id);
+      if (!confirm(`Delete saved session “${label}”? This cannot be undone.`)) {
+        return;
+      }
       try {
         await api(`/api/history/${encodeURIComponent(item.id)}`, {
           method: "DELETE",
@@ -1118,7 +1155,7 @@ function renderHistoryList() {
         }
         await refreshHistory();
       } catch (err) {
-        console.error(err);
+        alert(err.message || "Delete failed");
       }
     });
 
@@ -1182,7 +1219,7 @@ async function newSession() {
     setComposerEnabled(true);
     setStopEnabled(true);
     renderSessionList();
-    void refreshHistory();
+    void refreshHistory(); // immediate on new session
     els.prompt.focus();
   } catch (e) {
     setStatus("error", "Failed");
@@ -1239,6 +1276,7 @@ async function stopSession(tabId = activeTabId) {
 
   closeStream(st);
   tabStates.delete(tabId);
+  void refreshHistory();
 
   if (activeTabId === tabId) {
     activeTabId = null;
@@ -1319,7 +1357,7 @@ async function sendPrompt() {
     st.sending = false;
     st.cancelHttpInflight = false;
     renderSessionList();
-    void refreshHistory();
+    scheduleHistoryRefresh();
     if (st.tabId === activeTabId) {
       refreshActiveComposer();
       if (st.alive) els.prompt.focus();

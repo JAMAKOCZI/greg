@@ -79,7 +79,31 @@ describe("TranscriptStore", () => {
     await store.create({ id: "gone", cwd: "/z" });
     assert.equal(await store.delete("gone"), true);
     assert.equal(await store.load("gone"), null);
-    assert.equal(await store.delete("gone"), true); // force ok
+    assert.equal(await store.delete("gone"), false); // missing
+  });
+
+  it("ensure does not wipe existing messages", async () => {
+    await store.create({ id: "keep", cwd: "/k" });
+    await store.appendMessage("keep", { role: "user", text: "stay" });
+    await store.ensure({ id: "keep", cwd: "/k" });
+    const doc = await store.load("keep");
+    assert.equal(doc.messages.length, 1);
+    assert.equal(doc.messages[0].text, "stay");
+  });
+
+  it("upsertToolMessage updates same toolCallId in place", async () => {
+    await store.create({ id: "tools", cwd: "/t" });
+    await store.upsertToolMessage("tools", {
+      text: "read · running",
+      meta: { toolCallId: "t1", status: "running" },
+    });
+    await store.upsertToolMessage("tools", {
+      text: "read · completed",
+      meta: { toolCallId: "t1", status: "completed" },
+    });
+    const doc = await store.load("tools");
+    assert.equal(doc.messages.filter((m) => m.role === "tool").length, 1);
+    assert.equal(doc.messages[0].text, "read · completed");
   });
 
   it("rejects path-traversal ids", async () => {

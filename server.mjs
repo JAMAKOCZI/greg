@@ -55,7 +55,7 @@ const server = createGregServer({
     if (url.pathname === "/api/history" && req.method === "GET") {
       try {
         const list = await transcripts.list();
-        json(res, 200, { sessions: list, rootDir: SESSIONS_DIR });
+        json(res, 200, { sessions: list });
       } catch (err) {
         json(res, 500, { error: err.message || String(err) });
       }
@@ -80,9 +80,15 @@ const server = createGregServer({
           return true;
         }
         if (req.method === "DELETE") {
+          if (tabs.has(id)) {
+            json(res, 409, {
+              error: "Session is still live — stop it before deleting history",
+            });
+            return true;
+          }
           try {
-            await transcripts.delete(id);
-            json(res, 200, { ok: true });
+            const deleted = await transcripts.delete(id);
+            json(res, 200, { ok: true, deleted });
           } catch (err) {
             json(res, 400, { error: err.message || String(err) });
           }
@@ -113,6 +119,7 @@ const server = createGregServer({
       const tabId = body.tabId || newClientSessionId();
       const existing = tabs.get(tabId);
       if (existing) {
+        await flushThoughtBuffer(tabId, existing);
         await flushAgentBuffer(tabId, existing);
         existing.bridge.stop();
         endSse(existing);
@@ -131,17 +138,18 @@ const server = createGregServer({
           : null;
       const entry = tabs.create(tabId, { bridge, cwd, title });
       entry.agentBuffer = "";
+      entry.thoughtBuffer = "";
       wireBridge(tabId, entry);
 
       try {
         const result = await bridge.openSession({ cwd });
         tabs.touch(tabId);
         try {
-          await transcripts.create({
-            id: tabId,
+          await ensureTranscript(tabId, {
             cwd,
             title: entry.title,
             createdAt: entry.createdAt,
+            restarted: Boolean(existing),
           });
         } catch (persistErr) {
           console.error("[greg] transcript create failed", persistErr);
@@ -200,11 +208,7 @@ const server = createGregServer({
       tabs.ensureTitleFromPrompt(body.tabId, text);
       const title = entry.title;
       try {
-        await transcripts.appendMessage(
-          body.tabId,
-          { role: "user", text },
-          { title },
-        );
+        await persistMessage(body.tabId, entry, { role: "user", text }, { title });
       } catch (persistErr) {
         console.error("[greg] transcript user append failed", persistErr);
       }
@@ -213,10 +217,11 @@ const server = createGregServer({
         // Fire and stream via SSE; resolve when turn completes
         const result = await entry.bridge.prompt(text);
         tabs.touch(body.tabId);
+        await flushThoughtBuffer(body.tabId, entry);
         await flushAgentBuffer(body.tabId, entry);
         if (result?.stopReason === "cancelled") {
           try {
-            await transcripts.appendMessage(body.tabId, {
+            await persistMessage(body.tabId, entry, {
               role: "system",
               text: "Turn cancelled",
             });
@@ -235,9 +240,10 @@ const server = createGregServer({
           lastActiveAt: meta?.lastActiveAt ?? entry.lastActiveAt,
         });
       } catch (err) {
+        await flushThoughtBuffer(body.tabId, entry);
         await flushAgentBuffer(body.tabId, entry);
         try {
-          await transcripts.appendMessage(body.tabId, {
+          await persistMessage(body.tabId, entry, {
             role: "system",
             text: err.message || String(err),
           });
@@ -317,6 +323,7 @@ const server = createGregServer({
       const body = await readJson(req);
       const entry = tabs.get(body.tabId);
       if (entry) {
+        await flushThoughtBuffer(body.tabId, entry);
         await flushAgentBuffer(body.tabId, entry);
         entry.bridge.stop();
         endSse(entry);
@@ -346,22 +353,94 @@ function endSse(entry) {
 
 /**
  * @param {string} tabId
- * @param {import('./lib/tabs.mjs').TabEntry & { agentBuffer?: string }} entry
+ * @param {{ cwd: string, title?: string|null, createdAt?: number, restarted?: boolean }} opts
+ */
+async function ensureTranscript(tabId, opts) {
+  const existing = await transcripts.load(tabId);
+  if (existing) {
+    if (opts.restarted) {
+      await transcripts.appendMessage(tabId, {
+        role: "system",
+        text: "Session restarted",
+      });
+    }
+    if (opts.title) await transcripts.setTitle(tabId, opts.title);
+    return existing;
+  }
+  return transcripts.create({
+    id: tabId,
+    cwd: opts.cwd,
+    title: opts.title ?? null,
+    createdAt: opts.createdAt,
+  });
+}
+
+/**
+ * Append with auto-recreate if the file was deleted while the tab is live.
+ * @param {string} tabId
+ * @param {import('./lib/tabs.mjs').TabEntry} entry
+ * @param {{ role: string, text: string, meta?: object }} message
+ * @param {{ title?: string|null }} [opts]
+ */
+async function persistMessage(tabId, entry, message, opts = {}) {
+  let doc = await transcripts.appendMessage(tabId, message, opts);
+  if (doc) return doc;
+  await ensureTranscript(tabId, {
+    cwd: entry.cwd,
+    title: entry.title,
+    createdAt: entry.createdAt,
+  });
+  doc = await transcripts.appendMessage(tabId, message, opts);
+  if (!doc) {
+    console.error("[greg] transcript append still missing after ensure", tabId);
+  }
+  return doc;
+}
+
+/**
+ * @param {string} tabId
+ * @param {import('./lib/tabs.mjs').TabEntry & { agentBuffer?: string, thoughtBuffer?: string }} entry
  */
 async function flushAgentBuffer(tabId, entry) {
-  const text = String(entry.agentBuffer || "").trim();
-  entry.agentBuffer = "";
-  if (!text) return;
+  const raw = String(entry.agentBuffer || "");
+  if (!raw.trim()) {
+    entry.agentBuffer = "";
+    return;
+  }
   try {
-    await transcripts.appendMessage(tabId, { role: "agent", text });
+    await persistMessage(tabId, entry, { role: "agent", text: raw });
+    entry.agentBuffer = "";
   } catch (err) {
     console.error("[greg] transcript agent flush failed", err);
+    // keep buffer for retry on stop/shutdown
   }
 }
 
 /**
  * @param {string} tabId
- * @param {import('./lib/tabs.mjs').TabEntry & { agentBuffer?: string }} entry
+ * @param {import('./lib/tabs.mjs').TabEntry & { thoughtBuffer?: string }} entry
+ */
+async function flushThoughtBuffer(tabId, entry) {
+  const raw = String(entry.thoughtBuffer || "");
+  if (!raw.trim()) {
+    entry.thoughtBuffer = "";
+    return;
+  }
+  try {
+    await persistMessage(tabId, entry, {
+      role: "thought",
+      text: raw,
+      meta: { kind: "thought" },
+    });
+    entry.thoughtBuffer = "";
+  } catch (err) {
+    console.error("[greg] transcript thought flush failed", err);
+  }
+}
+
+/**
+ * @param {string} tabId
+ * @param {import('./lib/tabs.mjs').TabEntry & { agentBuffer?: string, thoughtBuffer?: string }} entry
  * @param {object} msg
  */
 function recordAcpForTranscript(tabId, entry, msg) {
@@ -383,21 +462,47 @@ function recordAcpForTranscript(tabId, entry, msg) {
     return;
   }
 
+  if (kind === "agent_thought_chunk" || kind === "agent_thought") {
+    const chunk =
+      update.content?.text ||
+      update.text ||
+      (typeof update.content === "string" ? update.content : "") ||
+      "";
+    if (chunk) entry.thoughtBuffer = (entry.thoughtBuffer || "") + chunk;
+    return;
+  }
+
   if (kind === "tool_call" || kind === "tool_call_update") {
     const title =
       update.title || update.toolCallId || update.toolName || update.kind || "tool";
     const status = update.status || "";
     const text = `${title}${status ? ` · ${status}` : ""}`;
-    // Best-effort; don't block SSE
+    const toolCallId = update.toolCallId || update.tool_call_id || null;
     void transcripts
-      .appendMessage(tabId, {
-        role: "tool",
+      .upsertToolMessage(tabId, {
         text,
         meta: {
-          toolCallId: update.toolCallId || update.tool_call_id || null,
+          toolCallId,
           status: status || null,
           kind: update.kind || null,
         },
+      })
+      .then(async (doc) => {
+        if (!doc) {
+          await ensureTranscript(tabId, {
+            cwd: entry.cwd,
+            title: entry.title,
+            createdAt: entry.createdAt,
+          });
+          await transcripts.upsertToolMessage(tabId, {
+            text,
+            meta: {
+              toolCallId,
+              status: status || null,
+              kind: update.kind || null,
+            },
+          });
+        }
       })
       .catch(() => {});
     return;
@@ -411,9 +516,16 @@ function recordAcpForTranscript(tabId, entry, msg) {
           .join("\n")
       : JSON.stringify(entries);
     void transcripts
-      .appendMessage(tabId, {
-        role: "plan",
-        text: text || "(plan)",
+      .upsertPlanMessage(tabId, text || "(plan)")
+      .then(async (doc) => {
+        if (!doc) {
+          await ensureTranscript(tabId, {
+            cwd: entry.cwd,
+            title: entry.title,
+            createdAt: entry.createdAt,
+          });
+          await transcripts.upsertPlanMessage(tabId, text || "(plan)");
+        }
       })
       .catch(() => {});
   }
@@ -441,22 +553,21 @@ function wireBridge(tabId, entry) {
     push("acp", msg);
   });
   bridge.on("request", (msg) => {
-    // Permission requests — lightweight system note
     const method = msg.method || "request";
-    void transcripts
-      .appendMessage(tabId, {
-        role: "permission",
-        text: `Agent request: ${method}`,
-        meta: { id: msg.id ?? null, method },
-      })
-      .catch(() => {});
+    void persistMessage(tabId, entry, {
+      role: "permission",
+      text: `Agent request: ${method}`,
+      meta: { id: msg.id ?? null, method },
+    }).catch(() => {});
     push("acp-request", msg);
   });
   bridge.on("stderr", (text) => push("stderr", { text }));
   bridge.on("error", (err) => push("error", { message: err.message }));
   bridge.on("exit", (info) => {
     tabs.touch(tabId);
-    void flushAgentBuffer(tabId, entry);
+    void flushThoughtBuffer(tabId, entry).then(() =>
+      flushAgentBuffer(tabId, entry),
+    );
     push("exit", info);
   });
 }
@@ -489,14 +600,33 @@ function openBrowser(url) {
   }
 }
 
-function shutdown() {
+async function shutdown() {
+  const flushes = [];
   for (const [tabId, entry] of tabs.entries()) {
-    void flushAgentBuffer(tabId, entry);
-    entry.bridge.stop();
+    flushes.push(
+      flushThoughtBuffer(tabId, entry)
+        .then(() => flushAgentBuffer(tabId, entry))
+        .catch((err) => console.error("[greg] shutdown flush failed", err)),
+    );
   }
-  server.close(() => process.exit(0));
-  setTimeout(() => process.exit(0), 1500).unref();
+  await Promise.allSettled(flushes);
+  for (const [, entry] of tabs.entries()) {
+    try {
+      entry.bridge.stop();
+    } catch {
+      /* ignore */
+    }
+  }
+  await new Promise((resolve) => {
+    server.close(() => resolve());
+    setTimeout(resolve, 1200).unref();
+  });
+  process.exit(0);
 }
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => {
+  void shutdown();
+});
+process.on("SIGTERM", () => {
+  void shutdown();
+});

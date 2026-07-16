@@ -448,6 +448,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **1 complete** | `session/cancel` notification; bridge + mock + `/api/cancel` + Cancel/Ctrl+.; v0.3.0 |
 | 2026-07-16 | **1 review fixes** | Per-tab sending, always park cancel bubble, mock yields + sticky queued cancel, bridge env, hadPending, re-cancel while busy |
 | 2026-07-16 | **2 complete** | Transcript store + API + History UI replay; v0.4.0; `~/.greg/sessions` |
+| 2026-07-16 | **2 review fixes** | Await shutdown flush, buffer-safe agent write, history race guard, no DELETE while live, thoughts, tool upsert, 0o700/0o600 |
 
 ---
 
