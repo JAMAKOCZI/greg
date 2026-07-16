@@ -30,6 +30,15 @@ const els = {
   sessionList: $("session-list"),
   historyList: $("history-list"),
   recentsList: $("recents-list"),
+  btnFiles: $("btn-files"),
+  btnFilesClose: $("btn-files-close"),
+  btnFilesRefresh: $("btn-files-refresh"),
+  filesPanel: $("files-panel"),
+  filesTree: $("files-tree"),
+  filesRootLabel: $("files-root-label"),
+  filesPreview: $("files-preview"),
+  filesPreviewPath: $("files-preview-path"),
+  filesPreviewMeta: $("files-preview-meta"),
 };
 
 /** When set, main pane is a read-only history replay (not a live tab). */
@@ -350,6 +359,279 @@ async function refreshRecents() {
     recentsCache = [];
   }
   renderRecents();
+}
+
+/* ── Files panel (read-only workspace tree + preview) ───── */
+
+/** @type {string|null} */
+let filesRoot = null;
+/** @type {string|null} */
+let filesActivePath = null;
+/** @type {number} */
+let filesLoadGen = 0;
+let filesPanelOpen = false;
+
+function workspaceRootForFiles() {
+  const st = activeState();
+  if (st?.cwd) return st.cwd;
+  const typed = (els.cwd?.value || "").trim();
+  if (typed) return typed;
+  return (settings.defaultCwd || "").trim() || null;
+}
+
+function formatBytes(n) {
+  const v = Number(n) || 0;
+  if (v < 1024) return `${v} B`;
+  if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`;
+  return `${(v / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function setFilesPanelOpen(open) {
+  filesPanelOpen = Boolean(open);
+  document.body.classList.toggle("files-open", filesPanelOpen);
+  if (els.filesPanel) els.filesPanel.hidden = !filesPanelOpen;
+  if (els.btnFiles) {
+    els.btnFiles.setAttribute("aria-pressed", filesPanelOpen ? "true" : "false");
+    els.btnFiles.classList.toggle("primary", filesPanelOpen);
+    els.btnFiles.classList.toggle("subtle", !filesPanelOpen);
+  }
+  if (filesPanelOpen) {
+    void refreshFilesTree();
+  }
+}
+
+function toggleFilesPanel() {
+  setFilesPanelOpen(!filesPanelOpen);
+}
+
+function clearFilesPreview(message = "Select a file", isError = false) {
+  filesActivePath = null;
+  if (els.filesPreviewPath) els.filesPreviewPath.textContent = message;
+  if (els.filesPreviewMeta) els.filesPreviewMeta.textContent = "";
+  if (els.filesPreview) {
+    els.filesPreview.textContent = isError ? message : "";
+    els.filesPreview.classList.toggle("is-empty", !isError);
+    els.filesPreview.classList.toggle("is-error", isError);
+  }
+  if (els.filesTree) {
+    for (const row of els.filesTree.querySelectorAll(".ft-row.is-active")) {
+      row.classList.remove("is-active");
+    }
+  }
+}
+
+/**
+ * @param {string} root
+ * @param {string} [path]
+ * @param {{ depth?: number }} [opts]
+ */
+async function fetchTree(root, path = "", opts = {}) {
+  const q = new URLSearchParams({ root });
+  if (path) q.set("path", path);
+  if (opts.depth != null) q.set("depth", String(opts.depth));
+  return api(`/api/fs/tree?${q}`);
+}
+
+/**
+ * @param {Array<{name:string,type:string,path:string,size?:number,children?:unknown[]}>} entries
+ * @param {HTMLElement} parentEl
+ * @param {string} root
+ */
+function renderTreeEntries(entries, parentEl, root) {
+  for (const entry of entries) {
+    const node = document.createElement("div");
+    node.className = "ft-node";
+    node.dataset.path = entry.path;
+    node.dataset.type = entry.type;
+
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "ft-row";
+    row.setAttribute("role", "treeitem");
+    row.title = entry.path;
+
+    const twist = document.createElement("span");
+    twist.className = "ft-twist";
+    twist.setAttribute("aria-hidden", "true");
+
+    const icon = document.createElement("span");
+    icon.className = "ft-icon";
+    icon.setAttribute("aria-hidden", "true");
+
+    const name = document.createElement("span");
+    name.className = "ft-name";
+    name.textContent = entry.name;
+
+    if (entry.type === "dir") {
+      const hasKids =
+        Array.isArray(entry.children) && entry.children.length > 0;
+      const loaded = Array.isArray(entry.children);
+      twist.textContent = "▸";
+      icon.textContent = "📁";
+      row.setAttribute("aria-expanded", "false");
+
+      const kids = document.createElement("div");
+      kids.className = "ft-children is-collapsed";
+      kids.setAttribute("role", "group");
+      if (hasKids) {
+        renderTreeEntries(entry.children, kids, root);
+        kids.dataset.loaded = "1";
+      } else if (loaded) {
+        kids.dataset.loaded = "1";
+      } else {
+        kids.dataset.loaded = "0";
+      }
+
+      row.addEventListener("click", async () => {
+        const collapsed = kids.classList.contains("is-collapsed");
+        if (collapsed) {
+          if (kids.dataset.loaded !== "1") {
+            twist.textContent = "…";
+            try {
+              const data = await fetchTree(root, entry.path, { depth: 1 });
+              kids.innerHTML = "";
+              renderTreeEntries(data.entries || [], kids, root);
+              kids.dataset.loaded = "1";
+            } catch (e) {
+              kids.innerHTML = "";
+              const err = document.createElement("div");
+              err.className = "files-tree-error";
+              err.textContent = e.message || "Failed to load";
+              kids.appendChild(err);
+              kids.dataset.loaded = "1";
+            }
+          }
+          kids.classList.remove("is-collapsed");
+          twist.textContent = "▾";
+          row.setAttribute("aria-expanded", "true");
+        } else {
+          kids.classList.add("is-collapsed");
+          twist.textContent = "▸";
+          row.setAttribute("aria-expanded", "false");
+        }
+      });
+
+      node.appendChild(row);
+      row.appendChild(twist);
+      row.appendChild(icon);
+      row.appendChild(name);
+      node.appendChild(kids);
+    } else {
+      twist.textContent = "";
+      icon.textContent = entry.type === "file" ? "📄" : "•";
+      row.addEventListener("click", () => {
+        void openFilePreview(root, entry.path, row);
+      });
+      node.appendChild(row);
+      row.appendChild(twist);
+      row.appendChild(icon);
+      row.appendChild(name);
+    }
+
+    parentEl.appendChild(node);
+  }
+}
+
+async function refreshFilesTree() {
+  if (!els.filesTree) return;
+  const root = workspaceRootForFiles();
+  const gen = ++filesLoadGen;
+
+  if (!root) {
+    filesRoot = null;
+    if (els.filesRootLabel) {
+      els.filesRootLabel.textContent = "Set a workspace path";
+      els.filesRootLabel.title = "";
+    }
+    els.filesTree.innerHTML =
+      '<div class="files-tree-empty">Enter a workspace path (or start a session) to browse files.</div>';
+    clearFilesPreview("No workspace");
+    return;
+  }
+
+  if (els.filesRootLabel) {
+    els.filesRootLabel.textContent = root;
+    els.filesRootLabel.title = root;
+  }
+  els.filesTree.innerHTML =
+    '<div class="files-tree-empty">Loading…</div>';
+  clearFilesPreview("Select a file");
+
+  try {
+    // depth 1: root listing + one level of children so expand is snappy
+    const data = await fetchTree(root, "", { depth: 1 });
+    if (gen !== filesLoadGen) return;
+    filesRoot = data.root || root;
+    if (els.filesRootLabel) {
+      els.filesRootLabel.textContent = filesRoot;
+      els.filesRootLabel.title = filesRoot;
+    }
+    els.filesTree.innerHTML = "";
+    const entries = data.entries || [];
+    if (!entries.length) {
+      els.filesTree.innerHTML =
+        '<div class="files-tree-empty">Empty directory (or only ignored folders).</div>';
+      return;
+    }
+    renderTreeEntries(entries, els.filesTree, filesRoot);
+    if (data.truncated) {
+      const note = document.createElement("div");
+      note.className = "files-tree-empty";
+      note.textContent = "Listing truncated (too many entries).";
+      els.filesTree.appendChild(note);
+    }
+  } catch (e) {
+    if (gen !== filesLoadGen) return;
+    filesRoot = null;
+    els.filesTree.innerHTML = `<div class="files-tree-error">${escapeHtml(
+      e.message || "Failed to load tree",
+    )}</div>`;
+    clearFilesPreview(e.message || "Failed to load tree", true);
+  }
+}
+
+/**
+ * @param {string} root
+ * @param {string} path
+ * @param {HTMLElement} [rowEl]
+ */
+async function openFilePreview(root, path, rowEl) {
+  if (!els.filesPreview) return;
+  filesActivePath = path;
+  if (els.filesTree) {
+    for (const row of els.filesTree.querySelectorAll(".ft-row.is-active")) {
+      row.classList.remove("is-active");
+    }
+  }
+  if (rowEl) rowEl.classList.add("is-active");
+
+  if (els.filesPreviewPath) els.filesPreviewPath.textContent = path;
+  if (els.filesPreviewMeta) els.filesPreviewMeta.textContent = "…";
+  els.filesPreview.textContent = "Loading…";
+  els.filesPreview.classList.remove("is-empty", "is-error");
+
+  try {
+    const q = new URLSearchParams({ root, path });
+    const data = await api(`/api/fs/file?${q}`);
+    if (filesActivePath !== path) return;
+    els.filesPreview.textContent = data.content ?? "";
+    els.filesPreview.classList.remove("is-empty", "is-error");
+    if (els.filesPreviewPath) {
+      els.filesPreviewPath.textContent = data.path || path;
+    }
+    if (els.filesPreviewMeta) {
+      const parts = [formatBytes(data.size)];
+      if (data.truncated) parts.push("truncated");
+      els.filesPreviewMeta.textContent = parts.join(" · ");
+    }
+  } catch (e) {
+    if (filesActivePath !== path) return;
+    const msg = e.message || "Failed to open file";
+    els.filesPreview.textContent = msg;
+    els.filesPreview.classList.add("is-error");
+    els.filesPreview.classList.remove("is-empty");
+    if (els.filesPreviewMeta) els.filesPreviewMeta.textContent = "";
+  }
 }
 
 function renderRecents() {
@@ -1710,6 +1992,11 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     return;
   }
+  if (filesPanelOpen) {
+    setFilesPanelOpen(false);
+    e.preventDefault();
+    return;
+  }
   const active = document.activeElement;
   if (
     active &&
@@ -1737,6 +2024,18 @@ if (els.btnSidebarClose) {
 }
 if (els.sidebarBackdrop) {
   els.sidebarBackdrop.addEventListener("click", () => closeSidebar());
+}
+
+if (els.btnFiles) {
+  els.btnFiles.addEventListener("click", () => toggleFilesPanel());
+}
+if (els.btnFilesClose) {
+  els.btnFilesClose.addEventListener("click", () => setFilesPanelOpen(false));
+}
+if (els.btnFilesRefresh) {
+  els.btnFilesRefresh.addEventListener("click", () => {
+    if (filesPanelOpen) void refreshFilesTree();
+  });
 }
 
 loadMeta();

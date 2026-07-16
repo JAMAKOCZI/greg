@@ -110,19 +110,67 @@
           </div>
           <div class="topbar-right">
             <div id="session-label" class="session-label muted">No session</div>
+            <button
+              type="button"
+              id="btn-files"
+              class="btn subtle"
+              title="Browse workspace files (read-only)"
+              aria-pressed="false"
+            >
+              Files
+            </button>
             <button type="button" id="btn-stop" class="btn subtle" disabled title="Stop session">
               Stop
             </button>
           </div>
         </header>
 
-        <section id="transcript" class="transcript" aria-live="polite">
-          <div class="empty-state" id="empty-state">
-            <div class="empty-mark" aria-hidden="true">G</div>
-            <p class="empty-title">New session to start</p>
-            <p class="empty-sub muted">local ACP desk</p>
-          </div>
-        </section>
+        <div class="main-body">
+          <section id="transcript" class="transcript" aria-live="polite">
+            <div class="empty-state" id="empty-state">
+              <div class="empty-mark" aria-hidden="true">G</div>
+              <p class="empty-title">New session to start</p>
+              <p class="empty-sub muted">local ACP desk</p>
+            </div>
+          </section>
+
+          <aside id="files-panel" class="files-panel" hidden aria-label="Workspace files">
+            <div class="files-panel-head">
+              <div class="files-panel-title">
+                <span class="section-label">Files</span>
+                <span id="files-root-label" class="files-root-label muted small" title=""></span>
+              </div>
+              <div class="files-panel-actions">
+                <button
+                  type="button"
+                  id="btn-files-refresh"
+                  class="btn icon subtle"
+                  title="Refresh tree"
+                  aria-label="Refresh file tree"
+                >
+                  ↻
+                </button>
+                <button
+                  type="button"
+                  id="btn-files-close"
+                  class="btn icon subtle"
+                  title="Close files"
+                  aria-label="Close files panel"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div id="files-tree" class="files-tree" role="tree" aria-label="File tree"></div>
+            <div class="files-preview-wrap">
+              <div class="files-preview-head">
+                <span id="files-preview-path" class="files-preview-path muted small">Select a file</span>
+                <span id="files-preview-meta" class="files-preview-meta muted small"></span>
+              </div>
+              <pre id="files-preview" class="files-preview" tabindex="0" aria-label="File preview"></pre>
+            </div>
+          </aside>
+        </div>
 
         <footer class="composer">
           <div class="composer-dock">

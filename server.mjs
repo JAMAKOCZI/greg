@@ -26,6 +26,7 @@ import {
   SettingsStore,
   defaultSettingsPath,
 } from "./lib/settings.mjs";
+import { listTree, readWorkspaceFile } from "./lib/fs-browse.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
@@ -62,7 +63,7 @@ const server = createGregServer({
         const settings = await settingsStore.load();
         json(res, 200, {
           name: "greg",
-          version: "0.7.0",
+          version: "0.8.0",
           grokBin: GROK_BIN,
           defaultCwd: await effectiveDefaultCwd(),
           sessionsDir: SESSIONS_DIR,
@@ -173,6 +174,64 @@ const server = createGregServer({
         return true;
       }
       json(res, 200, result);
+      return true;
+    }
+
+    // Read-only filesystem browse (under workspace root only)
+    if (url.pathname === "/api/fs/tree" && req.method === "GET") {
+      try {
+        const root =
+          (url.searchParams.get("root") || "").trim() ||
+          (await effectiveDefaultCwd());
+        const path = (url.searchParams.get("path") || "").trim();
+        const depthParam = url.searchParams.get("depth");
+        const depth =
+          depthParam != null && depthParam !== ""
+            ? Number(depthParam)
+            : undefined;
+        const result = await listTree(root, path, {
+          depth: Number.isFinite(depth) ? depth : undefined,
+        });
+        if (!result.ok) {
+          const status =
+            result.code === "OUTSIDE_ROOT"
+              ? 403
+              : result.code === "NOT_FOUND" || result.code === "ROOT_NOT_FOUND"
+                ? 404
+                : 400;
+          json(res, status, { error: result.error, code: result.code });
+          return true;
+        }
+        json(res, 200, result);
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    if (url.pathname === "/api/fs/file" && req.method === "GET") {
+      try {
+        const root =
+          (url.searchParams.get("root") || "").trim() ||
+          (await effectiveDefaultCwd());
+        const path = (url.searchParams.get("path") || "").trim();
+        const result = await readWorkspaceFile(root, path);
+        if (!result.ok) {
+          const status =
+            result.code === "OUTSIDE_ROOT"
+              ? 403
+              : result.code === "NOT_FOUND"
+                ? 404
+                : result.code === "BINARY"
+                  ? 415
+                  : 400;
+          json(res, status, { error: result.error, code: result.code });
+          return true;
+        }
+        json(res, 200, result);
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
       return true;
     }
 

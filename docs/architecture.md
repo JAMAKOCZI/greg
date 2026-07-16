@@ -43,6 +43,18 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 
 Step-by-step product plan: [superpowers/plans/2026-07-16-codex-quality-roadmap.md](superpowers/plans/2026-07-16-codex-quality-roadmap.md).
 
+## Workspace file browse (v0.8)
+
+Read-only file tree + text preview (no editor; writes still go through agent tools).
+
+- `lib/fs-browse.mjs`: `resolveUnderRoot`, `listTree`, `readWorkspaceFile`
+- Containment: lexical + `realpath` — paths outside workspace root → `403` / `OUTSIDE_ROOT`
+- Ignores heavy dirs: `node_modules`, `.git`, `dist`, `build`, `.next`, caches, etc.
+- Tree: depth-limited (default depth 2 server-side; UI loads depth 1 + lazy expand)
+- File: text only, size cap 512 KiB (truncated flag); binary → `415` / `BINARY`
+- API: `GET /api/fs/tree?root=&path=&depth=`, `GET /api/fs/file?root=&path=`
+- UI: topbar **Files** toggles right panel (tree + preview)
+
 ## ACP card fixtures (v0.7)
 
 Anonymized wire samples live in `test/fixtures/acp/` (read/edit/bash/plan/`diff_review`/unified patch).  
@@ -107,4 +119,5 @@ Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests
 - [x] Manual vs auto-approve permission cards (wired end-to-end)
 - [x] Project sidebar + workspace recents (validated path + MRU)
 - [x] ACP tool/diff/plan card hardening (fixtures under `test/fixtures/acp/`)
+- [x] File-centric UX (read-only tree + preview under workspace root)
 - [ ] Optional Tauri shell later (desktop packaging of this same UI)

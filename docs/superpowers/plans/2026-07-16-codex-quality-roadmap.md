@@ -108,6 +108,7 @@ Keep files focused; split when a file exceeds ~400–500 lines of *logic* (UI ma
 | `lib/transcript-store.mjs` | Durable transcripts (Phase 2+) |
 | `lib/workspace.mjs` | Path validation, recents (Phase 3+) |
 | `lib/settings.mjs` | Greg settings file under `~/.greg/` (Phase 4) |
+| `lib/fs-browse.mjs` | Read-only tree + file preview under workspace root (Phase 6) |
 | `public/app.js` | UI orchestration, sessions, SSE |
 | `public/cards.js` | Tool/diff/plan rendering |
 | `public/permissions.js` | Permission card DOM (optional extract) |
@@ -382,16 +383,16 @@ Store under **`~/.greg/sessions/<id>.json`** (Greg-owned). Do **not** depend on 
 
 ### Tasks
 
-- [ ] `GET /api/fs/tree?path=` (depth-limited, ignore heavy dirs: `node_modules`, `.git`)
-- [ ] `GET /api/fs/file?path=` (size cap, text only)
-- [ ] Security: resolve under workspace root only (path traversal tests)
-- [ ] UI: collapsible file tree + preview pane or modal
-- [ ] Commit(s) `feat: workspace file tree and preview`
+- [x] `GET /api/fs/tree?path=` (depth-limited, ignore heavy dirs: `node_modules`, `.git`)
+- [x] `GET /api/fs/file?path=` (size cap, text only)
+- [x] Security: resolve under workspace root only (path traversal tests)
+- [x] UI: collapsible file tree + preview pane or modal
+- [x] Commit(s) `feat: workspace file tree and preview`
 
 ### Phase 6 exit criteria
 
-- [ ] Cannot read files outside workspace root
-- [ ] Tree usable on greg’s own repo without freezing UI
+- [x] Cannot read files outside workspace root
+- [x] Tree usable on greg’s own repo without freezing UI
 
 ---
 
@@ -455,6 +456,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **4 review fixes** | WYSIWYG model on session/new, validate defaultCwd, save queue + error UX, strict boolean |
 | 2026-07-16 | **5 complete** | ACP fixtures (8+) + cards hardening; v0.7.0 |
 | 2026-07-16 | **5 review fixes** | mergeToolUpdate, diff_review upsert, safer diffs, truncate large diffs, transcript diff_review |
+| 2026-07-16 | **6 complete** | `lib/fs-browse` + `/api/fs/tree|file` + Files panel; path containment + symlink escape; v0.8.0 |
 
 ---
 

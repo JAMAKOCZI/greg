@@ -8,7 +8,7 @@ Greg is a browser UI that runs on your machine and talks to the official `grok` 
 
 ## Status
 
-Early (`0.7.0`). Multi-session desk with cancel, history, recents, settings, and **hardened ACP tool/diff/plan cards** backed by anonymized fixtures from Grok Build wire shapes.
+Early (`0.8.0`). Multi-session desk with cancel, history, recents, settings, hardened ACP tool/diff/plan cards, and a **read-only workspace file tree + preview**.
 
 ## Requirements
 
