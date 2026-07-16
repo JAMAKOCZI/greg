@@ -100,12 +100,22 @@
             <textarea
               id="prompt"
               rows="3"
-              placeholder="Message Greg… (Enter to send · ⌘/Ctrl+Enter · Shift+Enter newline)"
+              placeholder="Message Greg… (Enter send · ⌘/Ctrl+Enter · Ctrl+. cancel · Shift+Enter newline)"
               disabled
             ></textarea>
             <div class="composer-bar">
               <span class="muted small" id="hint">Create a session to start</span>
               <div class="composer-actions">
+                <button
+                  type="button"
+                  id="btn-cancel"
+                  class="btn subtle"
+                  disabled
+                  title="Cancel turn (Ctrl+.)"
+                  hidden
+                >
+                  Cancel
+                </button>
                 <button type="button" id="btn-send" class="btn primary" disabled>Send</button>
               </div>
             </div>

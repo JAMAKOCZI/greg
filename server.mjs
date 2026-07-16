@@ -31,7 +31,7 @@ const server = createGregServer({
     if (url.pathname === "/api/meta" && req.method === "GET") {
       json(res, 200, {
         name: "greg",
-        version: "0.2.1",
+        version: "0.3.0",
         grokBin: GROK_BIN,
         defaultCwd: DEFAULT_CWD,
         platform: platform(),
@@ -171,6 +171,26 @@ const server = createGregServer({
         );
       }
       json(res, 200, { ok: true });
+      return true;
+    }
+
+    // Interrupt in-flight turn (ACP session/cancel) — keeps session open
+    if (url.pathname === "/api/cancel" && req.method === "POST") {
+      const body = await readJson(req);
+      const entry = tabs.get(body.tabId);
+      if (!entry) {
+        json(res, 404, { error: "Unknown tab" });
+        return true;
+      }
+      try {
+        const result = entry.bridge.cancel({
+          reason: typeof body.reason === "string" ? body.reason : "user",
+        });
+        tabs.touch(body.tabId);
+        json(res, 200, { ok: true, ...result });
+      } catch (err) {
+        json(res, 502, { error: err.message || String(err) });
+      }
       return true;
     }
 

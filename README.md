@@ -8,7 +8,7 @@ Greg is a browser UI that runs on your machine and talks to the official `grok` 
 
 ## Status
 
-Early (`0.2.1`). Local multi-session desk, permission cards, and rich tool/diff/plan cards over ACP. Phase 0 foundation: `npm test`, mock ACP agent. Disk session history and workspace switcher still to come.
+Early (`0.3.0`). Multi-session desk, permission cards, tool/diff/plan cards, and **cancel turn** (`Ctrl+.` / Cancel button) over ACP. Phase 0 foundation: `npm test`, mock agent. Disk session history and workspace switcher still to come.
 
 ## Requirements
 

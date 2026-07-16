@@ -194,9 +194,11 @@ Keep files focused; split when a file exceeds ~400–500 lines of *logic* (UI ma
 
 ### Research spike (mandatory, short)
 
-- [ ] Inspect official Grok Build / ACP for cancel methods (`session/cancel`, `session/prompt` abort, notification). Check local `~/projects/grok-build` docs or ACP types **read-only**.
-- [ ] Record the chosen method in `docs/architecture.md` under a “Cancel” subsection.
-- [ ] If ACP has no cancel: document fallback (kill child and respawn session — worse UX, explicit).
+- [x] Inspect official Grok Build / ACP for cancel methods (`session/cancel`, `session/prompt` abort, notification). Check local `~/projects/grok-build` docs or ACP types **read-only**.
+- [x] Record the chosen method in `docs/architecture.md` under a “Cancel” subsection.
+- [x] If ACP has no cancel: document fallback (kill child and respawn session — worse UX, explicit).
+
+**Decision:** ACP **notification** `session/cancel` with `{ sessionId, reason }`. Pending `session/prompt` resolves with `stopReason: "cancelled"`.
 
 ### Tasks
 
@@ -206,9 +208,9 @@ Keep files focused; split when a file exceeds ~400–500 lines of *logic* (UI ma
 - Modify: `lib/acp-bridge.mjs`
 - Create: `test/acp-bridge-cancel.test.mjs` (may use mock child)
 
-- [ ] Add `cancel(sessionId?)` that sends the agreed ACP method (or documented fallback)
-- [ ] Ensure pending `session/prompt` promise rejects or resolves cleanly with a cancelled status (define one behavior and test it)
-- [ ] Commit `feat: support ACP session cancel on bridge`
+- [x] Add `cancel(sessionId?)` that sends the agreed ACP method (or documented fallback)
+- [x] Ensure pending `session/prompt` promise rejects or resolves cleanly with a cancelled status (define one behavior and test it)
+- [x] Commit `feat: support ACP session cancel on bridge`
 
 #### Task 1.2 — HTTP + UI
 
@@ -217,17 +219,17 @@ Keep files focused; split when a file exceeds ~400–500 lines of *logic* (UI ma
 - Modify: `public/app.js` / `index.html` — Cancel button enabled only while `status === busy`
 - Modify: styles as needed
 
-- [ ] Wire endpoint
-- [ ] Button + keyboard shortcut (Esc already used; prefer `Ctrl+.` or a visible Cancel next to Send)
-- [ ] Manual test with mock (mock should honor cancel by stopping chunks)
-- [ ] Commit `feat: cancel in-flight turn from UI`
+- [x] Wire endpoint
+- [x] Button + keyboard shortcut (Esc already used; prefer `Ctrl+.` or a visible Cancel next to Send)
+- [x] Manual test with mock (mock should honor cancel by stopping chunks)
+- [x] Commit `feat: cancel in-flight turn from UI`
 
 ### Phase 1 exit criteria
 
-- [ ] Cancel during mock streaming stops further agent chunks within ~1s
-- [ ] Session remains usable for a new prompt
-- [ ] Tests for bridge cancel path green
-- [ ] Architecture doc updated
+- [x] Cancel during mock streaming stops further agent chunks within ~1s
+- [x] Session remains usable for a new prompt
+- [x] Tests for bridge cancel path green
+- [x] Architecture doc updated
 
 ---
 
@@ -443,6 +445,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | — | Plan created from v0.2.0 baseline (`72d02dc`) |
 | 2026-07-16 | **0 complete** | Test harness, mock agent, `lib/tabs` + `lib/text`; v0.2.1; 14 tests green |
 | 2026-07-16 | **0 review fixes** | Code review on Phase 0: unique mock tool ids, safe TabRegistry.create, endSse on open fail, fixture tests, MOCK_STREAM_MS, npm test glob, check covers mock (17 tests) |
+| 2026-07-16 | **1 complete** | `session/cancel` notification; bridge + mock + `/api/cancel` + Cancel/Ctrl+.; v0.3.0 |
 
 ---
 

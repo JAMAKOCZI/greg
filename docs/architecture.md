@@ -18,6 +18,7 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 3. UI opens `GET /api/stream?tabId=…` (SSE) for live `session/update` and permission requests.
 4. Prompts go through `POST /api/prompt` → ACP `session/prompt`.
 5. Permission cards are answered with `POST /api/permission` → JSON-RPC response on the agent stdin.
+6. Cancel in-flight turn: `POST /api/cancel` → ACP **notification** `session/cancel` (session stays open).
 
 ## Trust model
 
@@ -33,7 +34,7 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 - Vendor telemetry of our own
 - Shipping maintainer-only tooling (e.g. graphify) as part of the product or install path
 
-## Quality foundation (v0.2.1)
+## Quality foundation (v0.2.1+)
 
 - `npm test` — `node:test` suites under `test/`
 - `scripts/mock-grok-agent.mjs` — fake `grok agent stdio` for offline smoke
@@ -42,12 +43,26 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 
 Step-by-step product plan: [superpowers/plans/2026-07-16-codex-quality-roadmap.md](superpowers/plans/2026-07-16-codex-quality-roadmap.md).
 
+## Cancel (v0.3)
+
+Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests):
+
+```json
+{ "jsonrpc": "2.0", "method": "session/cancel", "params": { "sessionId": "…", "reason": "user" } }
+```
+
+- This is a **notification** (no JSON-RPC response id).
+- Greg: `AcpBridge.cancel()` → `POST /api/cancel` → UI **Cancel** / `Ctrl+.`.
+- Expected agent behavior: end the in-flight `session/prompt` with `stopReason: "cancelled"`; keep the session process alive.
+- Mock agent honors cancel mid-stream when `MOCK_STREAM_MS > 0` (or if cancel arrives before the final result).
+- Fallback if a future agent ignores cancel: kill/respawn (not implemented; worse UX).
+
 ## Roadmap (product)
 
 - [x] Rich tool / diff / plan cards (live ACP stream; `public/cards.js`)
 - [x] Multi-tab live sessions (in-process; concurrent `grok agent stdio`)
 - [x] Quality foundation (tests + mock agent + tab registry)
-- [ ] Cancel / interrupt in-flight turn
+- [x] Cancel / interrupt in-flight turn
 - [ ] Durable transcripts under `~/.greg/sessions` (Greg-owned)
 - [ ] Multi-tab session history from `~/.grok/sessions` (optional import later)
 - [x] Manual vs auto-approve permission cards (wired end-to-end)

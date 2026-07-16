@@ -14,6 +14,7 @@ const els = {
   hint: $("hint"),
   btnNew: $("btn-new"),
   btnSend: $("btn-send"),
+  btnCancel: $("btn-cancel"),
   btnStop: $("btn-stop"),
   alwaysApprove: $("always-approve"),
   sidebar: $("sidebar"),
@@ -835,14 +836,24 @@ function setComposerEnabled(on) {
   els.prompt.disabled = !on;
   els.btnSend.disabled = !on || sending;
   els.hint.textContent = on
-    ? "Enter to send · ⌘/Ctrl+Enter · Shift+Enter newline · Esc focus"
+    ? sending
+      ? "Running… Cancel or Ctrl+. to stop the turn"
+      : "Enter to send · ⌘/Ctrl+Enter · Ctrl+. cancel · Esc focus"
     : activeTabId
       ? "Session stopped — pick a live tab or start a new one"
       : "Create a session to start";
+  setCancelEnabled(on && sending);
 }
 
 function setStopEnabled(on) {
   if (els.btnStop) els.btnStop.disabled = !on;
+}
+
+/** Cancel turn control — visible only while a prompt is in flight. */
+function setCancelEnabled(on) {
+  if (!els.btnCancel) return;
+  els.btnCancel.hidden = !on;
+  els.btnCancel.disabled = !on;
 }
 
 /**
@@ -1027,6 +1038,8 @@ async function sendPrompt() {
   setStatus("busy", "Running…");
   sending = true;
   els.btnSend.disabled = true;
+  setCancelEnabled(true);
+  setComposerEnabled(true);
 
   if (!st.title) {
     const oneLine = text.replace(/\s+/g, " ").trim();
@@ -1046,15 +1059,49 @@ async function sendPrompt() {
     if (data.lastActiveAt) st.lastActiveAt = data.lastActiveAt;
     updateSessionLabel(st);
     renderSessionList();
-    if (st.alive && st.tabId === activeTabId) setStatus("ready", "Ready");
+    if (st.alive && st.tabId === activeTabId) {
+      const cancelled = data.result?.stopReason === "cancelled";
+      if (cancelled) {
+        appendBubble(st, "system", "Turn cancelled");
+        setStatus("ready", "Cancelled");
+      } else {
+        setStatus("ready", "Ready");
+      }
+    }
   } catch (e) {
     if (st.tabId === activeTabId) setStatus("error", "Error");
     appendBubble(st, "system", e.message);
   } finally {
     sending = false;
     if (st.tabId === activeTabId) {
+      setCancelEnabled(false);
       els.btnSend.disabled = !st.alive;
+      setComposerEnabled(st.alive);
       els.prompt.focus();
+    }
+  }
+}
+
+/**
+ * Interrupt the in-flight agent turn (session stays open).
+ * @param {string} [tabId]
+ */
+async function cancelTurn(tabId = activeTabId) {
+  if (!tabId || !sending) return;
+  const st = tabStates.get(tabId);
+  if (!st?.alive) return;
+
+  if (els.btnCancel) els.btnCancel.disabled = true;
+  try {
+    await api("/api/cancel", {
+      method: "POST",
+      body: JSON.stringify({ tabId, reason: "user" }),
+    });
+    if (tabId === activeTabId) setStatus("busy", "Cancelling…");
+  } catch (e) {
+    if (tabId === activeTabId) {
+      appendBubble(st, "system", `Cancel failed: ${e.message}`);
+      setCancelEnabled(true);
     }
   }
 }
@@ -1097,6 +1144,9 @@ function toggleSidebar() {
 
 els.btnNew.addEventListener("click", () => newSession());
 els.btnSend.addEventListener("click", () => sendPrompt());
+if (els.btnCancel) {
+  els.btnCancel.addEventListener("click", () => cancelTurn(activeTabId));
+}
 if (els.btnStop) {
   els.btnStop.addEventListener("click", () => stopSession(activeTabId));
 }
@@ -1117,6 +1167,15 @@ els.prompt.addEventListener("input", () => {
 });
 
 document.addEventListener("keydown", (e) => {
+  // Ctrl+. — cancel in-flight turn (Codex-style interrupt)
+  if (e.key === "." && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+    if (sending && activeTabId) {
+      e.preventDefault();
+      cancelTurn(activeTabId);
+    }
+    return;
+  }
+
   if (e.key !== "Escape") return;
   if (document.body.classList.contains("sidebar-open")) {
     closeSidebar();

@@ -1,6 +1,6 @@
 {
   "name": "greg",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Codex-style local web workspace for Grok Build (ACP)",
   "type": "module",
   "private": true,
