@@ -21,8 +21,19 @@ Local **Codex-style web UI** for Grok Build. Browser → Greg HTTP/SSE → `grok
 ```sh
 npm start
 npm run check
+npm test
 GROK_BIN=/path/to/grok GREG_CWD=/path/to/project npm start
 ```
+
+### Mock agent (no `grok login` required)
+
+For local smoke without the real Grok Build binary:
+
+```sh
+GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start
+```
+
+`scripts/mock-grok-agent.mjs` speaks minimal ACP over stdio (`initialize`, `session/new`, `session/prompt` + a few `session/update` events). Covered by `test/mock-agent.test.mjs`.
 
 ## Upstream reference
 
