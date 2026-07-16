@@ -6,7 +6,7 @@
  * Usage with Greg:
  *   GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start
  *
- * Optional slow streaming (Phase 1 cancel prep):
+ * Optional slow streaming (cancel tests):
  *   MOCK_STREAM_MS=40 GROK_BIN=./scripts/mock-grok-agent.mjs …
  *
  * Spawned as: <this-script> agent stdio  (extra argv is ignored)
@@ -20,10 +20,18 @@ let sessionId = null;
 /** Delay between streamed updates; 0 = synchronous (default). */
 const STREAM_MS = Math.max(0, Number(process.env.MOCK_STREAM_MS || 0) || 0);
 
+/**
+ * Cooperative cancel for the in-flight prompt turn.
+ * @type {{ promptId: string|number, sessionId: string }|null}
+ */
+let activeTurn = null;
+/** @type {boolean} */
+let cancelRequested = false;
+
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 
 /**
- * Serialize prompt handling so overlapping prompts do not interleave writes.
+ * Serialize request handling so overlapping prompts do not interleave writes.
  * @type {Promise<void>}
  */
 let queue = Promise.resolve();
@@ -43,8 +51,14 @@ rl.on("line", (line) => {
     return;
   }
 
-  // Client notifications (e.g. initialized) — ignore
-  if (msg.id == null) return;
+  // Notifications (no id) — handle cancel immediately so it can interrupt stream
+  if (msg.id == null) {
+    if (msg.method === "session/cancel") {
+      handleCancel(msg.params || {});
+    }
+    // initialized etc. ignored
+    return;
+  }
 
   const method = msg.method;
   const id = msg.id;
@@ -69,6 +83,17 @@ rl.on("close", () => {
 });
 
 /**
+ * @param {object} params
+ */
+function handleCancel(params) {
+  const sid = params.sessionId || sessionId;
+  // Match any active turn for this session (or missing sessionId = all)
+  if (!activeTurn) return;
+  if (sid && activeTurn.sessionId && sid !== activeTurn.sessionId) return;
+  cancelRequested = true;
+}
+
+/**
  * @param {string} method
  * @param {string|number} id
  * @param {object} params
@@ -80,7 +105,7 @@ async function handleRequest(method, id, params) {
       id,
       result: {
         protocolVersion: params.protocolVersion ?? 1,
-        serverInfo: { name: "mock-grok-agent", version: "0.0.2" },
+        serverInfo: { name: "mock-grok-agent", version: "0.0.3" },
         agentCapabilities: {},
       },
     });
@@ -100,6 +125,9 @@ async function handleRequest(method, id, params) {
   if (method === "session/prompt") {
     const sid = params.sessionId || sessionId;
     const toolCallId = `mock-tool-${randomUUID()}`;
+    cancelRequested = false;
+    activeTurn = { promptId: id, sessionId: sid };
+
     const updates = [
       {
         sessionUpdate: "agent_thought_chunk",
@@ -139,15 +167,32 @@ async function handleRequest(method, id, params) {
       },
     ];
 
+    let cancelled = false;
     for (const update of updates) {
+      if (cancelRequested) {
+        cancelled = true;
+        break;
+      }
       notify("session/update", { sessionId: sid, update });
-      if (STREAM_MS > 0) await sleep(STREAM_MS);
+      if (STREAM_MS > 0) {
+        await sleep(STREAM_MS);
+        if (cancelRequested) {
+          cancelled = true;
+          break;
+        }
+      }
     }
+
+    activeTurn = null;
+    const wasCancelled = cancelled || cancelRequested;
+    cancelRequested = false;
 
     write({
       jsonrpc: "2.0",
       id,
-      result: { stopReason: "end_turn" },
+      result: {
+        stopReason: wasCancelled ? "cancelled" : "end_turn",
+      },
     });
     return;
   }
