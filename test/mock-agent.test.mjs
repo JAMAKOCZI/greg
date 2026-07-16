@@ -44,4 +44,30 @@ describe("mock grok agent via AcpBridge", () => {
       bridge.stop();
     }
   });
+
+  it("uses a unique toolCallId per prompt turn", async () => {
+    const bridge = new AcpBridge({
+      grokBin: MOCK_BIN,
+      cwd: join(__dirname, ".."),
+    });
+    /** @type {string[]} */
+    const toolIds = [];
+    bridge.on("notification", (msg) => {
+      const u = msg.params?.update;
+      if (u?.sessionUpdate === "tool_call" && u.toolCallId) {
+        toolIds.push(String(u.toolCallId));
+      }
+    });
+    try {
+      await bridge.openSession({ cwd: join(__dirname, "..") });
+      await bridge.prompt("turn one");
+      await bridge.prompt("turn two");
+      assert.equal(toolIds.length, 2);
+      assert.notEqual(toolIds[0], toolIds[1]);
+      assert.match(toolIds[0], /^mock-tool-/);
+      assert.match(toolIds[1], /^mock-tool-/);
+    } finally {
+      bridge.stop();
+    }
+  });
 });

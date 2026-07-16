@@ -75,6 +75,8 @@ GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start
 
 Open the printed one-time URL → **New session** → send a prompt. The mock speaks minimal ACP over stdio.
 
+Optional slow stream (for cancel experiments): `MOCK_STREAM_MS=40 GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start`.
+
 Quality roadmap (phased, step-by-step): [docs/superpowers/plans/2026-07-16-codex-quality-roadmap.md](docs/superpowers/plans/2026-07-16-codex-quality-roadmap.md).
 
 Optional maintainer tooling (knowledge graph, editor hooks, etc.) is **not** part of Greg’s runtime and is never required to run or ship the app. See `AGENTS.md` if you contribute with an AI coding agent.

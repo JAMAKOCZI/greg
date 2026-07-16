@@ -442,6 +442,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 |------|-------|-------|
 | 2026-07-16 | — | Plan created from v0.2.0 baseline (`72d02dc`) |
 | 2026-07-16 | **0 complete** | Test harness, mock agent, `lib/tabs` + `lib/text`; v0.2.1; 14 tests green |
+| 2026-07-16 | **0 review fixes** | Code review on Phase 0: unique mock tool ids, safe TabRegistry.create, endSse on open fail, fixture tests, MOCK_STREAM_MS, npm test glob, check covers mock (17 tests) |
 
 ---
 

@@ -35,6 +35,8 @@ GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start
 
 `scripts/mock-grok-agent.mjs` speaks minimal ACP over stdio (`initialize`, `session/new`, `session/prompt` + a few `session/update` events). Covered by `test/mock-agent.test.mjs`.
 
+Optional: `MOCK_STREAM_MS=40` spaces updates so mid-turn cancel can be tested later.
+
 ## Upstream reference
 
 Official harness source (for ACP shapes): `xai-org/grok-build` — especially agent mode / ACP docs.

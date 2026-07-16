@@ -99,6 +99,16 @@ describe("TabRegistry", () => {
     assert.equal(reg.list().length, 0);
   });
 
+  it("create refuses to overwrite an existing tab id", () => {
+    const reg = new TabRegistry();
+    reg.create("t1", { bridge: fakeBridge(), cwd: "/x" });
+    assert.throws(
+      () => reg.create("t1", { bridge: fakeBridge(), cwd: "/y" }),
+      /already exists/,
+    );
+    assert.equal(reg.get("t1").cwd, "/x");
+  });
+
   it("tabMeta reports dead bridges", () => {
     const meta = tabMeta("t1", {
       bridge: { sessionId: "s", alive: false },

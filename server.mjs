@@ -98,6 +98,7 @@ const server = createGregServer({
         });
       } catch (err) {
         bridge.stop();
+        endSse(entry);
         tabs.delete(tabId);
         json(res, 502, {
           error: err.message || String(err),
