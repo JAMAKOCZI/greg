@@ -386,6 +386,18 @@ function formatBytes(n) {
   return `${(v / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * Refresh Files panel when open and workspace root may have changed.
+ * No-op when panel closed. Forces reload when root differs or force=true.
+ * @param {{ force?: boolean }} [opts]
+ */
+function syncFilesPanelToWorkspace(opts = {}) {
+  if (!filesPanelOpen) return;
+  const next = workspaceRootForFiles();
+  if (!opts.force && next && filesRoot && next === filesRoot) return;
+  void refreshFilesTree();
+}
+
 function setFilesPanelOpen(open) {
   filesPanelOpen = Boolean(open);
   document.body.classList.toggle("files-open", filesPanelOpen);
@@ -463,9 +475,7 @@ function renderTreeEntries(entries, parentEl, root) {
     name.textContent = entry.name;
 
     if (entry.type === "dir") {
-      const hasKids =
-        Array.isArray(entry.children) && entry.children.length > 0;
-      const loaded = Array.isArray(entry.children);
+      // depth:0 load — children never prefetched; expand always fetches
       twist.textContent = "▸";
       icon.textContent = "📁";
       row.setAttribute("aria-expanded", "false");
@@ -473,42 +483,57 @@ function renderTreeEntries(entries, parentEl, root) {
       const kids = document.createElement("div");
       kids.className = "ft-children is-collapsed";
       kids.setAttribute("role", "group");
-      if (hasKids) {
-        renderTreeEntries(entry.children, kids, root);
-        kids.dataset.loaded = "1";
-      } else if (loaded) {
-        kids.dataset.loaded = "1";
-      } else {
-        kids.dataset.loaded = "0";
-      }
+      kids.dataset.loaded = "0";
+      kids.dataset.loading = "0";
+      /** @type {number} */
+      let expandGen = 0;
 
       row.addEventListener("click", async () => {
         const collapsed = kids.classList.contains("is-collapsed");
-        if (collapsed) {
-          if (kids.dataset.loaded !== "1") {
-            twist.textContent = "…";
-            try {
-              const data = await fetchTree(root, entry.path, { depth: 1 });
-              kids.innerHTML = "";
-              renderTreeEntries(data.entries || [], kids, root);
-              kids.dataset.loaded = "1";
-            } catch (e) {
-              kids.innerHTML = "";
-              const err = document.createElement("div");
-              err.className = "files-tree-error";
-              err.textContent = e.message || "Failed to load";
-              kids.appendChild(err);
-              kids.dataset.loaded = "1";
-            }
-          }
-          kids.classList.remove("is-collapsed");
-          twist.textContent = "▾";
-          row.setAttribute("aria-expanded", "true");
-        } else {
+        if (!collapsed) {
           kids.classList.add("is-collapsed");
           twist.textContent = "▸";
           row.setAttribute("aria-expanded", "false");
+          return;
         }
+
+        // Expand
+        if (kids.dataset.loading === "1") return;
+
+        if (kids.dataset.loaded !== "1") {
+          kids.dataset.loading = "1";
+          twist.textContent = "…";
+          const gen = ++expandGen;
+          try {
+            // depth 0: list this directory only (lazy)
+            const data = await fetchTree(root, entry.path, { depth: 0 });
+            if (gen !== expandGen) return;
+            kids.innerHTML = "";
+            renderTreeEntries(data.entries || [], kids, root);
+            kids.dataset.loaded = "1";
+            if (data.truncated) {
+              const note = document.createElement("div");
+              note.className = "files-tree-empty";
+              note.textContent = "Listing truncated…";
+              kids.appendChild(note);
+            }
+          } catch (e) {
+            if (gen !== expandGen) return;
+            kids.innerHTML = "";
+            const err = document.createElement("div");
+            err.className = "files-tree-error";
+            err.textContent = e.message || "Failed to load";
+            kids.appendChild(err);
+            // Allow retry on next expand (do not lock loaded=1)
+            kids.dataset.loaded = "0";
+          } finally {
+            if (gen === expandGen) kids.dataset.loading = "0";
+          }
+        }
+
+        kids.classList.remove("is-collapsed");
+        twist.textContent = "▾";
+        row.setAttribute("aria-expanded", "true");
       });
 
       node.appendChild(row);
@@ -558,8 +583,8 @@ async function refreshFilesTree() {
   clearFilesPreview("Select a file");
 
   try {
-    // depth 1: root listing + one level of children so expand is snappy
-    const data = await fetchTree(root, "", { depth: 1 });
+    // depth 0: only this directory — expand loads children (avoids huge DOM)
+    const data = await fetchTree(root, "", { depth: 0 });
     if (gen !== filesLoadGen) return;
     filesRoot = data.root || root;
     if (els.filesRootLabel) {
@@ -1420,6 +1445,7 @@ function switchToTab(tabId) {
   }
   renderSessionList();
   renderHistoryList();
+  syncFilesPanelToWorkspace();
   if (next.alive) els.prompt.focus();
 }
 
@@ -1452,6 +1478,8 @@ async function openHistory(id) {
   renderSessionList();
   renderHistoryList();
   closeSidebar();
+  // Active session unbound — refresh files against cwd field / history cwd when known
+  syncFilesPanelToWorkspace({ force: true });
 
   try {
     const doc = await api(`/api/history/${encodeURIComponent(id)}`);
@@ -1462,6 +1490,7 @@ async function openHistory(id) {
       ? `history · ${doc.title}`
       : `history · ${shortId(id)}`;
     if (doc.cwd) els.cwd.value = doc.cwd;
+    syncFilesPanelToWorkspace();
 
     for (const child of [...els.transcript.children]) {
       if (child !== els.emptyState) child.remove();
@@ -1701,6 +1730,7 @@ async function newSession() {
     renderSessionList();
     void refreshHistory(); // immediate on new session
     void refreshRecents();
+    syncFilesPanelToWorkspace();
     els.prompt.focus();
   } catch (e) {
     setStatus("error", "Failed");

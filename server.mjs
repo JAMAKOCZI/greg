@@ -26,7 +26,11 @@ import {
   SettingsStore,
   defaultSettingsPath,
 } from "./lib/settings.mjs";
-import { listTree, readWorkspaceFile } from "./lib/fs-browse.mjs";
+import {
+  listTree,
+  readWorkspaceFile,
+  fsBrowseHttpStatus,
+} from "./lib/fs-browse.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
@@ -193,13 +197,10 @@ const server = createGregServer({
           depth: Number.isFinite(depth) ? depth : undefined,
         });
         if (!result.ok) {
-          const status =
-            result.code === "OUTSIDE_ROOT"
-              ? 403
-              : result.code === "NOT_FOUND" || result.code === "ROOT_NOT_FOUND"
-                ? 404
-                : 400;
-          json(res, status, { error: result.error, code: result.code });
+          json(res, fsBrowseHttpStatus(result.code), {
+            error: result.error,
+            code: result.code,
+          });
           return true;
         }
         json(res, 200, result);
@@ -217,15 +218,10 @@ const server = createGregServer({
         const path = (url.searchParams.get("path") || "").trim();
         const result = await readWorkspaceFile(root, path);
         if (!result.ok) {
-          const status =
-            result.code === "OUTSIDE_ROOT"
-              ? 403
-              : result.code === "NOT_FOUND"
-                ? 404
-                : result.code === "BINARY"
-                  ? 415
-                  : 400;
-          json(res, status, { error: result.error, code: result.code });
+          json(res, fsBrowseHttpStatus(result.code), {
+            error: result.error,
+            code: result.code,
+          });
           return true;
         }
         json(res, 200, result);

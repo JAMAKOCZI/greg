@@ -47,13 +47,16 @@ Step-by-step product plan: [superpowers/plans/2026-07-16-codex-quality-roadmap.m
 
 Read-only file tree + text preview (no editor; writes still go through agent tools).
 
-- `lib/fs-browse.mjs`: `resolveUnderRoot`, `listTree`, `readWorkspaceFile`
-- Containment: lexical + `realpath` — paths outside workspace root → `403` / `OUTSIDE_ROOT`
-- Ignores heavy dirs: `node_modules`, `.git`, `dist`, `build`, `.next`, caches, etc.
-- Tree: depth-limited (default depth 2 server-side; UI loads depth 1 + lazy expand)
+- `lib/fs-browse.mjs`: `resolveUnderRoot`, `listTree`, `readWorkspaceFile`, `fsBrowseHttpStatus`
+- Root expands `~` / `~/…` like `resolveWorkspace`
+- Containment: lexical + `realpath`; outside-root symlink entries omitted from listings
+- File open: re-`realpath` + prefer `O_NOFOLLOW` (TOCTOU shrink); still localhost-only threat model
+- Ignores heavy dirs: `node_modules`, `.git`, `dist`, `build`, `.next`, caches, `graphify-out`, etc.
+- Tree: depth clamped to **3** (`MAX_TREE_DEPTH`); UI uses **depth 0** + lazy expand per folder
 - File: text only, size cap 512 KiB (truncated flag); binary → `415` / `BINARY`
+- HTTP: shared status map — `OUTSIDE_ROOT`/`EACCES` → 403, `NOT_FOUND`/`ROOT_NOT_FOUND` → 404, `BINARY` → 415
 - API: `GET /api/fs/tree?root=&path=&depth=`, `GET /api/fs/file?root=&path=`
-- UI: topbar **Files** toggles right panel (tree + preview)
+- UI: topbar **Files**; refreshes when switching sessions / history / new session; expand retries on error
 
 ## ACP card fixtures (v0.7)
 
