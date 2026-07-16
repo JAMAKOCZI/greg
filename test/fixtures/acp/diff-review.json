@@ -1,0 +1,18 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session/update",
+  "params": {
+    "sessionId": "sess-anon-007",
+    "update": {
+      "sessionUpdate": "diff_review",
+      "content": [
+        {
+          "type": "diff",
+          "path": "src/main.rs",
+          "oldText": "fn old() {}",
+          "newText": "fn new() {}"
+        }
+      ]
+    }
+  }
+}

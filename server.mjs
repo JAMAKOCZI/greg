@@ -62,7 +62,7 @@ const server = createGregServer({
         const settings = await settingsStore.load();
         json(res, 200, {
           name: "greg",
-          version: "0.6.0",
+          version: "0.7.0",
           grokBin: GROK_BIN,
           defaultCwd: await effectiveDefaultCwd(),
           sessionsDir: SESSIONS_DIR,

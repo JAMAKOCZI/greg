@@ -1,0 +1,25 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session/update",
+  "params": {
+    "sessionId": "sess-anon-001",
+    "update": {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "call_read_01",
+      "title": "Read README.md",
+      "kind": "read",
+      "status": "completed",
+      "locations": [{ "path": "README.md", "line": 1 }],
+      "content": [
+        {
+          "type": "content",
+          "content": {
+            "type": "text",
+            "text": "# Project\n\nAnonymized fixture body.\n"
+          }
+        }
+      ],
+      "rawInput": { "path": "README.md" }
+    }
+  }
+}

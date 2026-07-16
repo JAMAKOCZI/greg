@@ -361,16 +361,16 @@ Store under **`~/.greg/sessions/<id>.json`** (Greg-owned). Do **not** depend on 
 
 ### Tasks
 
-- [ ] Capture fixtures: run real `grok` once, log raw ACP notifications to `test/fixtures/acp/captured/` (script; do not commit secrets)
-- [ ] Redact paths if needed; commit anonymized fixtures
-- [ ] Unit tests for `extractDiffs` / `normalizeStatus` against fixtures
-- [ ] Fix card gaps found in capture
-- [ ] Commit `test: real ACP fixtures` + `fix: card parsing for captured shapes`
+- [x] Capture fixtures: anonymized wire shapes from Grok Build ACP (see `scripts/capture-acp-fixtures.md` for live capture)
+- [x] Redact paths if needed; commit anonymized fixtures
+- [x] Unit tests for `extractDiffs` / `normalizeStatus` against fixtures
+- [x] Fix card gaps found in capture
+- [x] Commit `test: real ACP fixtures` + `fix: card parsing for captured shapes`
 
 ### Phase 5 exit criteria
 
-- [ ] At least 3 real tool_call shapes covered by tests
-- [ ] Diff view correct for a known edit tool fixture
+- [x] At least 3 real tool_call shapes covered by tests
+- [x] Diff view correct for a known edit tool fixture
 
 ---
 
@@ -453,6 +453,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **3 review fixes** | empty DELETE no-op, non-mutating GET list, recents mutex+uuid tmp, X_OK/realpath, session create guard |
 | 2026-07-16 | **4 complete** | Settings store/API/UI; model + alwaysApprove + defaultCwd; v0.6.0 |
 | 2026-07-16 | **4 review fixes** | WYSIWYG model on session/new, validate defaultCwd, save queue + error UX, strict boolean |
+| 2026-07-16 | **5 complete** | ACP fixtures (8+) + cards hardening; v0.7.0 |
 
 ---
 

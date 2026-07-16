@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session/update",
+  "params": {
+    "sessionId": "sess-anon-008",
+    "update": {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "call_patch_01",
+      "title": "Apply patch",
+      "kind": "edit",
+      "status": "completed",
+      "rawOutput": "diff --git a/hello.txt b/hello.txt\n--- a/hello.txt\n+++ b/hello.txt\n@@ -1,2 +1,2 @@\n-hello\n+hello world\n"
+    }
+  }
+}

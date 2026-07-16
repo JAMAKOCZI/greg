@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session/update",
+  "params": {
+    "sessionId": "sess-anon-003",
+    "update": {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "call_sr_01",
+      "title": "search_replace",
+      "kind": "edit",
+      "status": "in_progress",
+      "rawInput": {
+        "file_path": "lib/http.mjs",
+        "old_string": "export function json(res, status, body) {\n",
+        "new_string": "export function json(res, status, body, headers = {}) {\n"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session/update",
+  "params": {
+    "sessionId": "sess-anon-006",
+    "update": {
+      "sessionUpdate": "plan",
+      "entries": [
+        { "content": "Inspect fixtures", "status": "completed", "priority": "high" },
+        { "content": "Harden card parsers", "status": "in_progress", "priority": "medium" },
+        { "content": "Document shapes", "status": "pending", "priority": "low" }
+      ]
+    }
+  }
+}

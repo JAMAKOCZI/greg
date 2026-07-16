@@ -1,0 +1,25 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session/update",
+  "params": {
+    "sessionId": "sess-anon-004",
+    "update": {
+      "sessionUpdate": "tool_call",
+      "toolCallId": "call_bash_01",
+      "title": "npm test",
+      "kind": "execute",
+      "status": "completed",
+      "rawInput": { "command": "npm test" },
+      "rawOutput": "TAP version 13\n# tests 10\n# pass 10\n",
+      "content": [
+        {
+          "type": "content",
+          "content": {
+            "type": "text",
+            "text": "TAP version 13\n# tests 10\n# pass 10\n"
+          }
+        }
+      ]
+    }
+  }
+}

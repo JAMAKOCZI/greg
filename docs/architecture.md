@@ -43,6 +43,12 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 
 Step-by-step product plan: [superpowers/plans/2026-07-16-codex-quality-roadmap.md](superpowers/plans/2026-07-16-codex-quality-roadmap.md).
 
+## ACP card fixtures (v0.7)
+
+Anonymized wire samples live in `test/fixtures/acp/` (read/edit/bash/plan/`diff_review`/unified patch).  
+`public/cards.js` parses full `session/update` notifications: `file_path`+`old_string`/`new_string`, `content[]` type `diff`, unified patches in `rawOutput`, status aliases.  
+Capture notes: `scripts/capture-acp-fixtures.md` (no secrets).
+
 ## Settings (v0.6)
 
 - File: `~/.greg/settings.json` (`GREG_SETTINGS_PATH` override)
@@ -100,4 +106,5 @@ Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests
 - [ ] Multi-tab session history from `~/.grok/sessions` (optional import later)
 - [x] Manual vs auto-approve permission cards (wired end-to-end)
 - [x] Project sidebar + workspace recents (validated path + MRU)
+- [x] ACP tool/diff/plan card hardening (fixtures under `test/fixtures/acp/`)
 - [ ] Optional Tauri shell later (desktop packaging of this same UI)

@@ -180,7 +180,43 @@ export function parseUnifiedDiffLines(text) {
 }
 
 /**
- * Extract structured diff payloads from a tool update / content item.
+ * Unwrap ACP session/update notification or raw update object.
+ * @param {unknown} msgOrUpdate
+ * @returns {Record<string, unknown>|null}
+ */
+export function unwrapSessionUpdate(msgOrUpdate) {
+  if (!msgOrUpdate || typeof msgOrUpdate !== "object") return null;
+  const m = /** @type {Record<string, unknown>} */ (msgOrUpdate);
+  // Full JSON-RPC notification
+  if (m.params && typeof m.params === "object") {
+    const p = /** @type {Record<string, unknown>} */ (m.params);
+    const u = p.update || p.sessionUpdate || p;
+    if (u && typeof u === "object") return /** @type {Record<string, unknown>} */ (u);
+  }
+  // Bare update / fields bag
+  if (m.sessionUpdate || m.toolCallId || m.content || m.rawInput || m.raw_input) {
+    return m;
+  }
+  if (m.update && typeof m.update === "object") {
+    return /** @type {Record<string, unknown>} */ (m.update);
+  }
+  return m;
+}
+
+/**
+ * Session update kind string (tool_call, plan, diff_review, …).
+ * @param {unknown} msgOrUpdate
+ * @returns {string}
+ */
+export function sessionUpdateKind(msgOrUpdate) {
+  const u = unwrapSessionUpdate(msgOrUpdate);
+  if (!u) return "";
+  return String(u.sessionUpdate || u.type || u.kind || "");
+}
+
+/**
+ * Extract structured diff payloads from a tool update / content item /
+ * full session/update notification.
  * @param {unknown} update
  * @returns {{ path: string, oldText?: string|null, newText?: string|null, unified?: string }[]}
  */
@@ -189,6 +225,9 @@ export function extractDiffs(update) {
   const diffs = [];
   if (update == null) return diffs;
 
+  // Accept full notifications
+  const unwrapped = unwrapSessionUpdate(update) || update;
+
   const pushDiff = (obj) => {
     if (!obj || typeof obj !== "object") return;
     const o = /** @type {Record<string, unknown>} */ (obj);
@@ -196,6 +235,7 @@ export function extractDiffs(update) {
     const path =
       o.path ||
       o.filePath ||
+      o.file_path ||
       o.file ||
       o.filename ||
       (typeof o.diff === "object" && o.diff
@@ -206,9 +246,21 @@ export function extractDiffs(update) {
         ? /** @type {Record<string, unknown>} */ (o.diff)
         : o;
     const oldText =
-      nested.oldText ?? nested.old_text ?? nested.before ?? nested.old ?? null;
+      nested.oldText ??
+      nested.old_text ??
+      nested.oldString ??
+      nested.old_string ??
+      nested.before ??
+      nested.old ??
+      null;
     const newText =
-      nested.newText ?? nested.new_text ?? nested.after ?? nested.new ?? null;
+      nested.newText ??
+      nested.new_text ??
+      nested.newString ??
+      nested.new_string ??
+      nested.after ??
+      nested.new ??
+      null;
     const unified =
       typeof nested.diff === "string"
         ? nested.diff
@@ -233,11 +285,21 @@ export function extractDiffs(update) {
     }
   };
 
-  if (typeof update === "object") {
-    const u = /** @type {Record<string, unknown>} */ (update);
+  if (typeof unwrapped === "object") {
+    const u = /** @type {Record<string, unknown>} */ (unwrapped);
 
-    // Top-level path + old/new
-    if (u.path && (u.oldText != null || u.newText != null || u.old_text != null || u.new_text != null)) {
+    // Top-level path + old/new (incl. search_replace field names)
+    if (
+      (u.path || u.file_path || u.filePath) &&
+      (u.oldText != null ||
+        u.newText != null ||
+        u.old_text != null ||
+        u.new_text != null ||
+        u.old_string != null ||
+        u.new_string != null ||
+        u.oldString != null ||
+        u.newString != null)
+    ) {
       pushDiff(u);
     }
     if (typeof u.diff === "string" && looksLikeUnifiedDiff(u.diff)) {
@@ -266,7 +328,14 @@ export function extractDiffs(update) {
           continue;
         }
         const it = /** @type {Record<string, unknown>} */ (item);
-        if (it.type === "diff" || it.path || it.oldText != null || it.newText != null) {
+        if (
+          it.type === "diff" ||
+          it.path ||
+          it.oldText != null ||
+          it.newText != null ||
+          it.old_text != null ||
+          it.new_text != null
+        ) {
           pushDiff(it);
         }
         // Nested content block carrying text that is a diff
@@ -293,19 +362,34 @@ export function extractDiffs(update) {
       });
     }
 
-    // rawInput / rawOutput shapes (edit tools)
-    for (const key of ["rawInput", "raw_input", "rawOutput", "raw_output", "input", "output"]) {
+    // rawInput / rawOutput shapes (edit tools, search_replace, patches)
+    for (const key of [
+      "rawInput",
+      "raw_input",
+      "rawOutput",
+      "raw_output",
+      "input",
+      "output",
+      "fields",
+    ]) {
       const v = u[key];
       if (v && typeof v === "object") {
         const r = /** @type {Record<string, unknown>} */ (v);
+        // fields may nest again
+        if (r.fields && typeof r.fields === "object") {
+          pushDiff(r.fields);
+        }
+        pushDiff(r);
         if (
-          r.path &&
-          (r.oldText != null ||
-            r.newText != null ||
-            r.old_text != null ||
-            r.new_text != null ||
-            r.diff != null ||
-            r.patch != null)
+          r.path ||
+          r.file_path ||
+          r.filePath ||
+          r.oldText != null ||
+          r.newText != null ||
+          r.old_string != null ||
+          r.new_string != null ||
+          r.diff != null ||
+          r.patch != null
         ) {
           pushDiff(r);
         }
@@ -313,11 +397,21 @@ export function extractDiffs(update) {
         diffs.push({ path: guessPathFromUnified(v) || "diff", unified: v });
       }
     }
-  } else if (typeof update === "string" && looksLikeUnifiedDiff(update)) {
-    diffs.push({ path: guessPathFromUnified(update) || "diff", unified: update });
+  } else if (typeof unwrapped === "string" && looksLikeUnifiedDiff(unwrapped)) {
+    diffs.push({
+      path: guessPathFromUnified(unwrapped) || "diff",
+      unified: unwrapped,
+    });
   }
 
-  return diffs;
+  // Dedupe by path+unified/old/new
+  const seen = new Set();
+  return diffs.filter((d) => {
+    const key = `${d.path}|${d.unified || ""}|${d.oldText || ""}|${d.newText || ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** @param {string} unified */
@@ -444,24 +538,25 @@ export function buildDiffBlock(diff) {
  * @returns {HTMLElement}
  */
 export function upsertToolCard(existing, update) {
+  const u = unwrapSessionUpdate(update) || /** @type {Record<string, unknown>} */ (update);
   const toolCallId = String(
-    update.toolCallId || update.tool_call_id || update.id || "",
+    u.toolCallId || u.tool_call_id || u.id || "",
   );
   const title = String(
-    update.title ||
-      update.toolName ||
-      update.tool_name ||
-      update.name ||
-      update.kind ||
+    u.title ||
+      u.toolName ||
+      u.tool_name ||
+      u.name ||
+      u.kind ||
       "tool",
   );
-  const kind = update.kind ? String(update.kind) : "";
-  const status = normalizeStatus(update.status);
-  const diffs = extractDiffs(update);
-  const texts = extractTextSnippets(update);
-  const locations = Array.isArray(update.locations) ? update.locations : [];
-  const rawInput = update.rawInput ?? update.raw_input ?? update.input;
-  const rawOutput = update.rawOutput ?? update.raw_output ?? update.output;
+  const kind = u.kind ? String(u.kind) : "";
+  const status = normalizeStatus(u.status);
+  const diffs = extractDiffs(u);
+  const texts = extractTextSnippets(u);
+  const locations = Array.isArray(u.locations) ? u.locations : [];
+  const rawInput = u.rawInput ?? u.raw_input ?? u.input;
+  const rawOutput = u.rawOutput ?? u.raw_output ?? u.output;
 
   const card = existing || document.createElement("div");
   card.className = `card card-tool status-${status}`;
@@ -610,7 +705,7 @@ export function upsertToolCard(existing, update) {
   ]);
   const extra = {};
   let hasExtra = false;
-  for (const [k, v] of Object.entries(update)) {
+  for (const [k, v] of Object.entries(u)) {
     if (!known.has(k) && v != null && v !== "") {
       extra[k] = v;
       hasExtra = true;
@@ -647,12 +742,13 @@ export function upsertToolCard(existing, update) {
  * @returns {HTMLElement}
  */
 export function upsertPlanCard(existing, update) {
-  const entries = Array.isArray(update.entries)
-    ? update.entries
-    : Array.isArray(update.plan)
-      ? update.plan
-      : Array.isArray(update.steps)
-        ? update.steps
+  const u = unwrapSessionUpdate(update) || /** @type {Record<string, unknown>} */ (update);
+  const entries = Array.isArray(u.entries)
+    ? u.entries
+    : Array.isArray(u.plan)
+      ? u.plan
+      : Array.isArray(u.steps)
+        ? u.steps
         : [];
 
   const card = existing || document.createElement("div");
@@ -683,8 +779,8 @@ export function upsertPlanCard(existing, update) {
     const li = document.createElement("li");
     li.className = "plan-item muted";
     li.textContent =
-      update && typeof update === "object"
-        ? prettyJson(update).slice(0, 500) || "(empty plan)"
+      u && typeof u === "object"
+        ? prettyJson(u).slice(0, 500) || "(empty plan)"
         : "(empty plan)";
     list.appendChild(li);
   } else {

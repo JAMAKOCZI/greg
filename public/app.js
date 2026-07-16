@@ -638,6 +638,21 @@ function handleAcp(tabId, msg) {
     const card = upsertPlanCard(existing, update);
     st.planCard = card;
     mountTabCard(st, card, !existing);
+    return;
+  }
+  // Grok Build diff review payload — render as a tool-style card with diffs
+  if (kind === "diff_review") {
+    const key = `__diff_review_${st.toolCards.size}`;
+    const synthetic = {
+      ...update,
+      title: update.title || "Diff review",
+      kind: "diff_review",
+      status: update.status || "completed",
+      toolCallId: update.toolCallId || key,
+    };
+    const card = upsertToolCard(null, synthetic);
+    st.toolCards.set(key, card);
+    mountTabCard(st, card, true);
   }
 }
 

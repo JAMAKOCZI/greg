@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "method": "session/update",
+  "params": {
+    "sessionId": "sess-anon-005",
+    "update": {
+      "sessionUpdate": "tool_call_update",
+      "toolCallId": "call_edit_01",
+      "status": "in_progress",
+      "title": "Edit src/app.js"
+    }
+  }
+}
