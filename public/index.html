@@ -9,26 +9,45 @@
   </head>
   <body>
     <div id="app">
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
         <div class="brand">
-          <span class="logo">G</span>
+          <span class="logo" aria-hidden="true">G</span>
           <div>
             <div class="brand-name">Greg</div>
             <div class="brand-sub">Grok Build desk</div>
           </div>
+          <button
+            type="button"
+            id="btn-sidebar-close"
+            class="btn icon sidebar-close"
+            aria-label="Close sidebar"
+            title="Close sidebar"
+          >
+            ✕
+          </button>
         </div>
 
         <button type="button" id="btn-new" class="btn primary block">New session</button>
 
-        <div class="field">
-          <label for="cwd">Workspace</label>
-          <input id="cwd" type="text" spellcheck="false" autocomplete="off" />
+        <div class="sidebar-section">
+          <div class="section-label">Workspace</div>
+          <div class="field">
+            <label class="sr-only" for="cwd">Workspace path</label>
+            <input id="cwd" type="text" spellcheck="false" autocomplete="off" placeholder="/path/to/project" />
+          </div>
         </div>
 
-        <div class="field row">
+        <div class="sidebar-section sessions-section">
+          <div class="section-label">Sessions</div>
+          <div id="session-list" class="session-list" aria-label="Active sessions" aria-live="polite"></div>
+          <p class="session-list-hint muted small">Live multi-tab sessions. History from disk is not loaded yet.</p>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-label">Permissions</div>
           <label class="check">
             <input id="always-approve" type="checkbox" />
-            Auto-approve tools
+            <span>Auto-approve tools</span>
           </label>
         </div>
 
@@ -41,27 +60,55 @@
         </div>
       </aside>
 
+      <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+
       <main class="main">
         <header class="topbar">
-          <div id="status" class="status idle">
-            <span class="dot"></span>
-            <span id="status-text">Idle</span>
+          <div class="topbar-left">
+            <button
+              type="button"
+              id="btn-sidebar-open"
+              class="btn icon sidebar-open"
+              aria-label="Open sidebar"
+              title="Menu"
+            >
+              ☰
+            </button>
+            <div id="status" class="status idle" role="status">
+              <span class="dot" aria-hidden="true"></span>
+              <span id="status-text">Idle</span>
+            </div>
           </div>
-          <div id="session-label" class="session-label muted">No session</div>
+          <div class="topbar-right">
+            <div id="session-label" class="session-label muted">No session</div>
+            <button type="button" id="btn-stop" class="btn subtle" disabled title="Stop session">
+              Stop
+            </button>
+          </div>
         </header>
 
-        <section id="transcript" class="transcript" aria-live="polite"></section>
+        <section id="transcript" class="transcript" aria-live="polite">
+          <div class="empty-state" id="empty-state">
+            <div class="empty-mark" aria-hidden="true">G</div>
+            <p class="empty-title">New session to start</p>
+            <p class="empty-sub muted">local ACP desk</p>
+          </div>
+        </section>
 
         <footer class="composer">
-          <textarea
-            id="prompt"
-            rows="3"
-            placeholder="Message Greg… (Enter to send, Shift+Enter for newline)"
-            disabled
-          ></textarea>
-          <div class="composer-bar">
-            <span class="muted small" id="hint">Create a session to start</span>
-            <button type="button" id="btn-send" class="btn primary" disabled>Send</button>
+          <div class="composer-dock">
+            <textarea
+              id="prompt"
+              rows="3"
+              placeholder="Message Greg… (Enter to send · ⌘/Ctrl+Enter · Shift+Enter newline)"
+              disabled
+            ></textarea>
+            <div class="composer-bar">
+              <span class="muted small" id="hint">Create a session to start</span>
+              <div class="composer-actions">
+                <button type="button" id="btn-send" class="btn primary" disabled>Send</button>
+              </div>
+            </div>
           </div>
         </footer>
       </main>

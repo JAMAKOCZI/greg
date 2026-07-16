@@ -8,7 +8,7 @@ Greg is a browser UI that runs on your machine and talks to the official `grok` 
 
 ## Status
 
-Early scaffold (`0.1.0`). Usable shell + ACP bridge skeleton. Full Codex-grade workflows (diff review, multi-session, parallel agents) are in progress.
+Early (`0.2.0`). Local multi-session desk, permission cards, and rich tool/diff/plan cards over ACP. Disk session history and workspace switcher still to come.
 
 ## Requirements
 

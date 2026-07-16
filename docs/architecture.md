@@ -35,8 +35,9 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 
 ## Roadmap (product)
 
-- [ ] Rich tool / diff / plan cards
-- [ ] Multi-tab session history from `~/.grok/sessions`
-- [ ] Project sidebar + workspace switcher
-- [ ] Manual vs auto-approve modes (wired end-to-end)
+- [x] Rich tool / diff / plan cards (live ACP stream; `public/cards.js`)
+- [x] Multi-tab live sessions (in-process; concurrent `grok agent stdio`)
+- [ ] Multi-tab session history from `~/.grok/sessions` (disk resume)
+- [x] Manual vs auto-approve permission cards (wired end-to-end)
+- [ ] Project sidebar + workspace switcher (path field only for now)
 - [ ] Optional Tauri shell later (desktop packaging of this same UI)

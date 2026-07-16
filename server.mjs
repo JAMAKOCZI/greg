@@ -3,6 +3,7 @@
  * Binds to 127.0.0.1 only. Spawns `grok agent stdio` per browser tab.
  */
 import { spawn } from "node:child_process";
+import { basename } from "node:path";
 import { platform } from "node:os";
 import {
   createGregServer,
@@ -18,7 +19,17 @@ const HOST = "127.0.0.1";
 const DEFAULT_CWD = process.env.GREG_CWD || process.cwd();
 const GROK_BIN = process.env.GROK_BIN || "grok";
 
-/** @type {Map<string, { bridge: AcpBridge, sse: Set<import('node:http').ServerResponse>, cwd: string }>} */
+/**
+ * Active agent tabs (one bridge/process each).
+ * @type {Map<string, {
+ *   bridge: AcpBridge,
+ *   sse: Set<import('node:http').ServerResponse>,
+ *   cwd: string,
+ *   title: string|null,
+ *   createdAt: number,
+ *   lastActiveAt: number,
+ * }>}
+ */
 const tabs = new Map();
 
 const bootstrapToken = newBootstrapToken();
@@ -31,7 +42,7 @@ const server = createGregServer({
     if (url.pathname === "/api/meta" && req.method === "GET") {
       json(res, 200, {
         name: "greg",
-        version: "0.1.0",
+        version: "0.2.0",
         grokBin: GROK_BIN,
         defaultCwd: DEFAULT_CWD,
         platform: platform(),
@@ -39,32 +50,72 @@ const server = createGregServer({
       return true;
     }
 
+    if (url.pathname === "/api/sessions" && req.method === "GET") {
+      json(res, 200, { tabs: listTabs() });
+      return true;
+    }
+
+    // GET /api/session/:tabId
+    {
+      const m = url.pathname.match(/^\/api\/session\/([^/]+)$/);
+      if (m && req.method === "GET") {
+        const tabId = decodeURIComponent(m[1]);
+        const entry = tabs.get(tabId);
+        if (!entry) {
+          json(res, 404, { error: "Unknown tab" });
+          return true;
+        }
+        json(res, 200, tabMeta(tabId, entry));
+        return true;
+      }
+    }
+
     if (url.pathname === "/api/session/new" && req.method === "POST") {
       const body = await readJson(req);
       const cwd = body.cwd || DEFAULT_CWD;
+      // Client may send tabId only to reconnect/replace that tab; otherwise always create new.
       const tabId = body.tabId || newClientSessionId();
       const existing = tabs.get(tabId);
       if (existing) {
         existing.bridge.stop();
+        for (const s of existing.sse) {
+          try {
+            s.end();
+          } catch {
+            /* ignore */
+          }
+        }
         tabs.delete(tabId);
       }
 
+      const now = Date.now();
       const bridge = new AcpBridge({
         grokBin: GROK_BIN,
         cwd,
         model: body.model || null,
         alwaysApprove: Boolean(body.alwaysApprove),
       });
-      const entry = { bridge, sse: new Set(), cwd };
+      const entry = {
+        bridge,
+        sse: new Set(),
+        cwd,
+        title: typeof body.title === "string" && body.title.trim() ? body.title.trim() : null,
+        createdAt: now,
+        lastActiveAt: now,
+      };
       tabs.set(tabId, entry);
       wireBridge(tabId, entry);
 
       try {
         const result = await bridge.openSession({ cwd });
+        entry.lastActiveAt = Date.now();
         json(res, 200, {
           tabId,
           sessionId: bridge.sessionId,
           cwd,
+          title: entry.title,
+          createdAt: entry.createdAt,
+          lastActiveAt: entry.lastActiveAt,
           result,
         });
       } catch (err) {
@@ -75,6 +126,23 @@ const server = createGregServer({
           hint: "Is `grok` installed and authenticated? Try: grok login",
         });
       }
+      return true;
+    }
+
+    if (
+      (url.pathname === "/api/session/title" && req.method === "POST") ||
+      (url.pathname === "/api/session" && req.method === "PATCH")
+    ) {
+      const body = await readJson(req);
+      const entry = tabs.get(body.tabId);
+      if (!entry) {
+        json(res, 404, { error: "Unknown tab" });
+        return true;
+      }
+      const title = typeof body.title === "string" ? body.title.trim() : "";
+      entry.title = title || null;
+      entry.lastActiveAt = Date.now();
+      json(res, 200, { ok: true, ...tabMeta(body.tabId, entry) });
       return true;
     }
 
@@ -90,10 +158,20 @@ const server = createGregServer({
         json(res, 400, { error: "Empty prompt" });
         return true;
       }
+      entry.lastActiveAt = Date.now();
+      if (!entry.title) {
+        entry.title = titleFromPrompt(text);
+      }
       try {
         // Fire and stream via SSE; resolve when turn completes
         const result = await entry.bridge.prompt(text);
-        json(res, 200, { ok: true, result });
+        entry.lastActiveAt = Date.now();
+        json(res, 200, {
+          ok: true,
+          result,
+          title: entry.title,
+          lastActiveAt: entry.lastActiveAt,
+        });
       } catch (err) {
         json(res, 502, { error: err.message || String(err) });
       }
@@ -158,6 +236,42 @@ const server = createGregServer({
   },
 });
 
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+function titleFromPrompt(text) {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= 40) return oneLine;
+  return oneLine.slice(0, 40).trimEnd() + "…";
+}
+
+/**
+ * @param {string} tabId
+ * @param {{ bridge: AcpBridge, cwd: string, title: string|null, createdAt: number, lastActiveAt: number }} entry
+ */
+function tabMeta(tabId, entry) {
+  return {
+    tabId,
+    sessionId: entry.bridge.sessionId,
+    cwd: entry.cwd,
+    cwdBase: basename(entry.cwd) || entry.cwd,
+    title: entry.title,
+    createdAt: entry.createdAt,
+    lastActiveAt: entry.lastActiveAt,
+    alive: Boolean(entry.bridge.alive),
+  };
+}
+
+function listTabs() {
+  const list = [];
+  for (const [tabId, entry] of tabs) {
+    list.push(tabMeta(tabId, entry));
+  }
+  list.sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+  return list;
+}
+
 function wireBridge(tabId, entry) {
   const { bridge } = entry;
   const push = (event, data) => {
@@ -175,7 +289,11 @@ function wireBridge(tabId, entry) {
   bridge.on("request", (msg) => push("acp-request", msg));
   bridge.on("stderr", (text) => push("stderr", { text }));
   bridge.on("error", (err) => push("error", { message: err.message }));
-  bridge.on("exit", (info) => push("exit", info));
+  bridge.on("exit", (info) => {
+    // Mark inactive for list UI; keep tab until client stops it.
+    entry.lastActiveAt = Date.now();
+    push("exit", info);
+  });
 }
 
 server.listen(PORT, HOST, () => {
