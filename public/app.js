@@ -17,6 +17,8 @@ const els = {
   btnCancel: $("btn-cancel"),
   btnStop: $("btn-stop"),
   alwaysApprove: $("always-approve"),
+  model: $("model"),
+  defaultCwd: $("default-cwd"),
   sidebar: $("sidebar"),
   btnSidebarOpen: $("btn-sidebar-open"),
   btnSidebarClose: $("btn-sidebar-close"),
@@ -210,10 +212,25 @@ async function api(path, opts = {}) {
   return data;
 }
 
+/** @type {{ alwaysApprove: boolean, model: string|null, defaultCwd: string|null, theme: string }} */
+let settings = {
+  alwaysApprove: false,
+  model: null,
+  defaultCwd: null,
+  theme: "dark",
+};
+
+let settingsSaveTimer = null;
+let settingsLoaded = false;
+
 async function loadMeta() {
   try {
     const meta = await api("/api/meta");
-    if (!els.cwd.value) els.cwd.value = meta.defaultCwd || "";
+    if (meta.settings) applySettingsToUi(meta.settings);
+    if (!els.cwd.value) {
+      els.cwd.value =
+        (meta.settings && meta.settings.defaultCwd) || meta.defaultCwd || "";
+    }
     els.meta.innerHTML = `
       <div><strong>greg</strong> v${escapeHtml(meta.version)}</div>
       <div class="muted">bin: ${escapeHtml(meta.grokBin)}</div>
@@ -221,6 +238,60 @@ async function loadMeta() {
     `;
   } catch (e) {
     els.meta.textContent = e.message;
+  }
+}
+
+/**
+ * @param {{ alwaysApprove?: boolean, model?: string|null, defaultCwd?: string|null, theme?: string }} s
+ */
+function applySettingsToUi(s) {
+  settings = {
+    alwaysApprove: Boolean(s.alwaysApprove),
+    model: s.model ?? null,
+    defaultCwd: s.defaultCwd ?? null,
+    theme: s.theme || "dark",
+  };
+  if (els.alwaysApprove) els.alwaysApprove.checked = settings.alwaysApprove;
+  if (els.model) els.model.value = settings.model || "";
+  if (els.defaultCwd) els.defaultCwd.value = settings.defaultCwd || "";
+  settingsLoaded = true;
+}
+
+function readSettingsFromUi() {
+  return {
+    alwaysApprove: Boolean(els.alwaysApprove?.checked),
+    model: (els.model?.value || "").trim() || null,
+    defaultCwd: (els.defaultCwd?.value || "").trim() || null,
+    theme: settings.theme || "dark",
+  };
+}
+
+function scheduleSettingsSave() {
+  if (!settingsLoaded) return;
+  if (settingsSaveTimer) clearTimeout(settingsSaveTimer);
+  settingsSaveTimer = setTimeout(() => {
+    settingsSaveTimer = null;
+    void saveSettings();
+  }, 400);
+}
+
+async function saveSettings() {
+  if (!settingsLoaded) return;
+  const next = readSettingsFromUi();
+  try {
+    const data = await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify(next),
+    });
+    if (data.settings) {
+      settings = data.settings;
+      // Keep cwd input in sync if user only set default and cwd is empty
+      if (settings.defaultCwd && !els.cwd.value.trim()) {
+        els.cwd.value = settings.defaultCwd;
+      }
+    }
+  } catch (e) {
+    console.error("[greg] settings save failed", e);
   }
 }
 
@@ -1257,7 +1328,8 @@ async function newSession() {
       method: "POST",
       body: JSON.stringify({
         cwd: els.cwd.value.trim() || undefined,
-        alwaysApprove: els.alwaysApprove.checked,
+        alwaysApprove: els.alwaysApprove?.checked,
+        model: (els.model?.value || "").trim() || undefined,
       }),
     });
 
@@ -1523,6 +1595,18 @@ function toggleSidebar() {
 
 els.btnNew.addEventListener("click", () => newSession());
 els.btnSend.addEventListener("click", () => sendPrompt());
+
+if (els.alwaysApprove) {
+  els.alwaysApprove.addEventListener("change", () => scheduleSettingsSave());
+}
+if (els.model) {
+  els.model.addEventListener("change", () => scheduleSettingsSave());
+  els.model.addEventListener("blur", () => scheduleSettingsSave());
+}
+if (els.defaultCwd) {
+  els.defaultCwd.addEventListener("change", () => scheduleSettingsSave());
+  els.defaultCwd.addEventListener("blur", () => scheduleSettingsSave());
+}
 if (els.btnCancel) {
   els.btnCancel.addEventListener("click", () => cancelTurn(activeTabId));
 }

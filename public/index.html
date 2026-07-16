@@ -51,12 +51,33 @@
           <p class="history-list-hint muted small">Replay past chats from disk (read-only).</p>
         </div>
 
-        <div class="sidebar-section">
-          <div class="section-label">Permissions</div>
+        <div class="sidebar-section settings-section">
+          <div class="section-label">Settings</div>
           <label class="check">
             <input id="always-approve" type="checkbox" />
             <span>Auto-approve tools</span>
           </label>
+          <div class="field">
+            <label for="model">Model (optional)</label>
+            <input
+              id="model"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="e.g. grok-4 — leave empty for default"
+            />
+          </div>
+          <div class="field">
+            <label for="default-cwd">Default workspace</label>
+            <input
+              id="default-cwd"
+              type="text"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="empty = process cwd / GREG_CWD"
+            />
+          </div>
+          <p class="settings-hint muted small">Saved to ~/.greg/settings.json</p>
         </div>
 
         <div class="sidebar-meta" id="meta">

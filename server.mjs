@@ -22,17 +22,33 @@ import {
   RecentsStore,
   defaultRecentsPath,
 } from "./lib/workspace.mjs";
+import {
+  SettingsStore,
+  defaultSettingsPath,
+} from "./lib/settings.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
-const DEFAULT_CWD = process.env.GREG_CWD || process.cwd();
+const ENV_DEFAULT_CWD = process.env.GREG_CWD || process.cwd();
 const GROK_BIN = process.env.GROK_BIN || "grok";
 const SESSIONS_DIR = process.env.GREG_SESSIONS_DIR || defaultSessionsDir();
 const RECENTS_PATH = process.env.GREG_RECENTS_PATH || defaultRecentsPath();
+const SETTINGS_PATH = process.env.GREG_SETTINGS_PATH || defaultSettingsPath();
 
 const tabs = new TabRegistry();
 const transcripts = new TranscriptStore({ rootDir: SESSIONS_DIR });
 const recents = new RecentsStore({ filePath: RECENTS_PATH });
+const settingsStore = new SettingsStore({ filePath: SETTINGS_PATH });
+
+/**
+ * Effective default workspace: settings.defaultCwd if set, else env/cwd.
+ * @returns {Promise<string>}
+ */
+async function effectiveDefaultCwd() {
+  const s = await settingsStore.load();
+  if (s.defaultCwd) return s.defaultCwd;
+  return ENV_DEFAULT_CWD;
+}
 
 const bootstrapToken = newBootstrapToken();
 const sessionSecret = newSessionSecret();
@@ -42,14 +58,37 @@ const server = createGregServer({
   sessionSecret,
   async onApi(req, res, url) {
     if (url.pathname === "/api/meta" && req.method === "GET") {
+      const settings = await settingsStore.load();
       json(res, 200, {
         name: "greg",
-        version: "0.5.0",
+        version: "0.6.0",
         grokBin: GROK_BIN,
-        defaultCwd: DEFAULT_CWD,
+        defaultCwd: await effectiveDefaultCwd(),
         sessionsDir: SESSIONS_DIR,
         platform: platform(),
+        settings,
       });
+      return true;
+    }
+
+    if (url.pathname === "/api/settings" && req.method === "GET") {
+      try {
+        const settings = await settingsStore.load();
+        json(res, 200, { settings });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    if (url.pathname === "/api/settings" && req.method === "PUT") {
+      try {
+        const body = await readJson(req);
+        const settings = await settingsStore.update(body.settings || body);
+        json(res, 200, { ok: true, settings });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
       return true;
     }
 
@@ -182,7 +221,9 @@ const server = createGregServer({
 
     if (url.pathname === "/api/session/new" && req.method === "POST") {
       const body = await readJson(req);
-      const cwdInput = (body.cwd || DEFAULT_CWD || "").trim() || DEFAULT_CWD;
+      const settings = await settingsStore.load();
+      const fallbackCwd = await effectiveDefaultCwd();
+      const cwdInput = (body.cwd || fallbackCwd || "").trim() || fallbackCwd;
       const resolved = await resolveWorkspace(cwdInput);
       if (!resolved.ok) {
         json(res, 400, {
@@ -205,11 +246,20 @@ const server = createGregServer({
         tabs.delete(tabId);
       }
 
+      const model =
+        typeof body.model === "string" && body.model.trim()
+          ? body.model.trim()
+          : settings.model;
+      const alwaysApprove =
+        body.alwaysApprove !== undefined
+          ? Boolean(body.alwaysApprove)
+          : settings.alwaysApprove;
+
       const bridge = new AcpBridge({
         grokBin: GROK_BIN,
         cwd,
-        model: body.model || null,
-        alwaysApprove: Boolean(body.alwaysApprove),
+        model: model || null,
+        alwaysApprove,
       });
       const title =
         typeof body.title === "string" && body.title.trim()
@@ -663,9 +713,12 @@ server.listen(PORT, HOST, () => {
   console.log("");
   console.log("  Greg — local web workspace for Grok Build");
   console.log(`  Open once:  ${url}`);
-  console.log(`  Workspace:  ${DEFAULT_CWD}`);
+  effectiveDefaultCwd().then((cwd) => {
+    console.log(`  Workspace:  ${cwd}`);
+  });
   console.log(`  Grok bin:   ${GROK_BIN}`);
   console.log(`  History:    ${SESSIONS_DIR}`);
+  console.log(`  Settings:   ${SETTINGS_PATH}`);
   console.log("");
 
   if (!process.env.GREG_NO_OPEN) {

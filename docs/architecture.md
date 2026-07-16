@@ -43,6 +43,14 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 
 Step-by-step product plan: [superpowers/plans/2026-07-16-codex-quality-roadmap.md](superpowers/plans/2026-07-16-codex-quality-roadmap.md).
 
+## Settings (v0.6)
+
+- File: `~/.greg/settings.json` (`GREG_SETTINGS_PATH` override)
+- Fields: `alwaysApprove`, `model`, `defaultCwd`, `theme`
+- `GET/PUT /api/settings`; also embedded in `/api/meta`
+- `session/new` uses settings when body omits `model` / `alwaysApprove`
+- Effective default workspace: settings.defaultCwd → `GREG_CWD` → process cwd
+
 ## Workspace recents (v0.5)
 
 - `lib/workspace.mjs`: `resolveWorkspace` (empty / missing / not-a-dir / `~`+`~/` only / realpath / `R_OK|X_OK`)

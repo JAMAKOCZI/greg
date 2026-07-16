@@ -342,16 +342,16 @@ Store under **`~/.greg/sessions/<id>.json`** (Greg-owned). Do **not** depend on 
 
 ### Tasks
 
-- [ ] `lib/settings.mjs` load/save + tests
-- [ ] `GET/PUT /api/settings`
-- [ ] UI: small settings panel or sidebar toggles bound to settings
-- [ ] Pass `model` into `AcpBridge` on session/new from settings when body omits model
-- [ ] Commit `feat: persistent greg settings`
+- [x] `lib/settings.mjs` load/save + tests
+- [x] `GET/PUT /api/settings`
+- [x] UI: small settings panel or sidebar toggles bound to settings
+- [x] Pass `model` into `AcpBridge` on session/new from settings when body omits model
+- [x] Commit `feat: persistent greg settings`
 
 ### Phase 4 exit criteria
 
-- [ ] Toggle always-approve, restart Greg, toggle still set
-- [ ] Model field (if exposed) passed through to bridge args
+- [x] Toggle always-approve, restart Greg, toggle still set
+- [x] Model field (if exposed) passed through to bridge args
 
 ---
 
@@ -451,6 +451,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **2 review fixes** | Await shutdown flush, buffer-safe agent write, history race guard, no DELETE while live, thoughts, tool upsert, 0o700/0o600 |
 | 2026-07-16 | **3 complete** | resolveWorkspace + recents store/API/UI; v0.5.0 |
 | 2026-07-16 | **3 review fixes** | empty DELETE no-op, non-mutating GET list, recents mutex+uuid tmp, X_OK/realpath, session create guard |
+| 2026-07-16 | **4 complete** | Settings store/API/UI; model + alwaysApprove + defaultCwd; v0.6.0 |
 
 ---
 
