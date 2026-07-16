@@ -31,6 +31,7 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 - Multi-user / remote exposure without Tailscale or similar
 - Replacing Grok Build’s agent loop
 - Vendor telemetry of our own
+- Shipping maintainer-only tooling (e.g. graphify) as part of the product or install path
 
 ## Roadmap (product)
 
