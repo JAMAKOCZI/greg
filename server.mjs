@@ -3,7 +3,6 @@
  * Binds to 127.0.0.1 only. Spawns `grok agent stdio` per browser tab.
  */
 import { spawn } from "node:child_process";
-import { basename } from "node:path";
 import { platform } from "node:os";
 import {
   createGregServer,
@@ -13,25 +12,14 @@ import {
   readJson,
 } from "./lib/http.mjs";
 import { AcpBridge, newClientSessionId } from "./lib/acp-bridge.mjs";
-import { titleFromPrompt } from "./lib/text.mjs";
+import { TabRegistry } from "./lib/tabs.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
 const DEFAULT_CWD = process.env.GREG_CWD || process.cwd();
 const GROK_BIN = process.env.GROK_BIN || "grok";
 
-/**
- * Active agent tabs (one bridge/process each).
- * @type {Map<string, {
- *   bridge: AcpBridge,
- *   sse: Set<import('node:http').ServerResponse>,
- *   cwd: string,
- *   title: string|null,
- *   createdAt: number,
- *   lastActiveAt: number,
- * }>}
- */
-const tabs = new Map();
+const tabs = new TabRegistry();
 
 const bootstrapToken = newBootstrapToken();
 const sessionSecret = newSessionSecret();
@@ -52,7 +40,7 @@ const server = createGregServer({
     }
 
     if (url.pathname === "/api/sessions" && req.method === "GET") {
-      json(res, 200, { tabs: listTabs() });
+      json(res, 200, { tabs: tabs.list() });
       return true;
     }
 
@@ -61,12 +49,12 @@ const server = createGregServer({
       const m = url.pathname.match(/^\/api\/session\/([^/]+)$/);
       if (m && req.method === "GET") {
         const tabId = decodeURIComponent(m[1]);
-        const entry = tabs.get(tabId);
-        if (!entry) {
+        const meta = tabs.meta(tabId);
+        if (!meta) {
           json(res, 404, { error: "Unknown tab" });
           return true;
         }
-        json(res, 200, tabMeta(tabId, entry));
+        json(res, 200, meta);
         return true;
       }
     }
@@ -79,37 +67,26 @@ const server = createGregServer({
       const existing = tabs.get(tabId);
       if (existing) {
         existing.bridge.stop();
-        for (const s of existing.sse) {
-          try {
-            s.end();
-          } catch {
-            /* ignore */
-          }
-        }
+        endSse(existing);
         tabs.delete(tabId);
       }
 
-      const now = Date.now();
       const bridge = new AcpBridge({
         grokBin: GROK_BIN,
         cwd,
         model: body.model || null,
         alwaysApprove: Boolean(body.alwaysApprove),
       });
-      const entry = {
-        bridge,
-        sse: new Set(),
-        cwd,
-        title: typeof body.title === "string" && body.title.trim() ? body.title.trim() : null,
-        createdAt: now,
-        lastActiveAt: now,
-      };
-      tabs.set(tabId, entry);
+      const title =
+        typeof body.title === "string" && body.title.trim()
+          ? body.title.trim()
+          : null;
+      const entry = tabs.create(tabId, { bridge, cwd, title });
       wireBridge(tabId, entry);
 
       try {
         const result = await bridge.openSession({ cwd });
-        entry.lastActiveAt = Date.now();
+        tabs.touch(tabId);
         json(res, 200, {
           tabId,
           sessionId: bridge.sessionId,
@@ -135,15 +112,15 @@ const server = createGregServer({
       (url.pathname === "/api/session" && req.method === "PATCH")
     ) {
       const body = await readJson(req);
-      const entry = tabs.get(body.tabId);
+      const entry = tabs.setTitle(
+        body.tabId,
+        typeof body.title === "string" ? body.title : null,
+      );
       if (!entry) {
         json(res, 404, { error: "Unknown tab" });
         return true;
       }
-      const title = typeof body.title === "string" ? body.title.trim() : "";
-      entry.title = title || null;
-      entry.lastActiveAt = Date.now();
-      json(res, 200, { ok: true, ...tabMeta(body.tabId, entry) });
+      json(res, 200, { ok: true, ...tabs.meta(body.tabId) });
       return true;
     }
 
@@ -159,19 +136,17 @@ const server = createGregServer({
         json(res, 400, { error: "Empty prompt" });
         return true;
       }
-      entry.lastActiveAt = Date.now();
-      if (!entry.title) {
-        entry.title = titleFromPrompt(text);
-      }
+      tabs.ensureTitleFromPrompt(body.tabId, text);
       try {
         // Fire and stream via SSE; resolve when turn completes
         const result = await entry.bridge.prompt(text);
-        entry.lastActiveAt = Date.now();
+        tabs.touch(body.tabId);
+        const meta = tabs.meta(body.tabId);
         json(res, 200, {
           ok: true,
           result,
-          title: entry.title,
-          lastActiveAt: entry.lastActiveAt,
+          title: meta?.title ?? entry.title,
+          lastActiveAt: meta?.lastActiveAt ?? entry.lastActiveAt,
         });
       } catch (err) {
         json(res, 502, { error: err.message || String(err) });
@@ -189,7 +164,10 @@ const server = createGregServer({
       if (body.error) {
         entry.bridge.respondError(body.id, body.error);
       } else {
-        entry.bridge.respond(body.id, body.result ?? { outcome: { outcome: "selected", optionId: "allow-once" } });
+        entry.bridge.respond(
+          body.id,
+          body.result ?? { outcome: { outcome: "selected", optionId: "allow-once" } },
+        );
       }
       json(res, 200, { ok: true });
       return true;
@@ -220,13 +198,7 @@ const server = createGregServer({
       const entry = tabs.get(body.tabId);
       if (entry) {
         entry.bridge.stop();
-        for (const s of entry.sse) {
-          try {
-            s.end();
-          } catch {
-            /* ignore */
-          }
-        }
+        endSse(entry);
         tabs.delete(body.tabId);
       }
       json(res, 200, { ok: true });
@@ -238,31 +210,23 @@ const server = createGregServer({
 });
 
 /**
- * @param {string} tabId
- * @param {{ bridge: AcpBridge, cwd: string, title: string|null, createdAt: number, lastActiveAt: number }} entry
+ * @param {{ sse: Set<import('node:http').ServerResponse> }} entry
  */
-function tabMeta(tabId, entry) {
-  return {
-    tabId,
-    sessionId: entry.bridge.sessionId,
-    cwd: entry.cwd,
-    cwdBase: basename(entry.cwd) || entry.cwd,
-    title: entry.title,
-    createdAt: entry.createdAt,
-    lastActiveAt: entry.lastActiveAt,
-    alive: Boolean(entry.bridge.alive),
-  };
-}
-
-function listTabs() {
-  const list = [];
-  for (const [tabId, entry] of tabs) {
-    list.push(tabMeta(tabId, entry));
+function endSse(entry) {
+  for (const s of entry.sse) {
+    try {
+      s.end();
+    } catch {
+      /* ignore */
+    }
   }
-  list.sort((a, b) => b.lastActiveAt - a.lastActiveAt);
-  return list;
+  entry.sse.clear();
 }
 
+/**
+ * @param {string} tabId
+ * @param {import('./lib/tabs.mjs').TabEntry} entry
+ */
 function wireBridge(tabId, entry) {
   const { bridge } = entry;
   const push = (event, data) => {
@@ -281,8 +245,8 @@ function wireBridge(tabId, entry) {
   bridge.on("stderr", (text) => push("stderr", { text }));
   bridge.on("error", (err) => push("error", { message: err.message }));
   bridge.on("exit", (info) => {
-    // Mark inactive for list UI; keep tab until client stops it.
-    entry.lastActiveAt = Date.now();
+    // Keep tab until client stops it; refresh activity for list UI.
+    tabs.touch(tabId);
     push("exit", info);
   });
 }
@@ -315,7 +279,7 @@ function openBrowser(url) {
 }
 
 function shutdown() {
-  for (const [, entry] of tabs) {
+  for (const [, entry] of tabs.entries()) {
     entry.bridge.stop();
   }
   server.close(() => process.exit(0));
