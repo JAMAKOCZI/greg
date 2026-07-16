@@ -64,21 +64,19 @@ export function statusLabel(status) {
  * Detect whether a string looks like a unified diff.
  * @param {string} text
  */
+/**
+ * Detect whether a string looks like a unified diff.
+ * Requires strong headers (diff --git / ---+++ / @@) to avoid false positives
+ * from shell logs, stack traces, or markdown with leading +/-.
+ * @param {string} text
+ */
 export function looksLikeUnifiedDiff(text) {
   if (!text || typeof text !== "string") return false;
   const t = text.trimStart();
   if (/^diff --git /m.test(t)) return true;
   if (/^--- .+\n\+\+\+ /m.test(t)) return true;
   if (/^@@ -\d/.test(t) || /\n@@ -\d/.test(t)) return true;
-  // Heuristic: several +/- lines without being pure JSON
-  const lines = t.split("\n").slice(0, 80);
-  let plus = 0;
-  let minus = 0;
-  for (const line of lines) {
-    if (line.startsWith("+") && !line.startsWith("+++")) plus++;
-    if (line.startsWith("-") && !line.startsWith("---")) minus++;
-  }
-  return plus + minus >= 3 && (plus > 0 || minus > 0);
+  return false;
 }
 
 /**
@@ -211,8 +209,66 @@ export function unwrapSessionUpdate(msgOrUpdate) {
 export function sessionUpdateKind(msgOrUpdate) {
   const u = unwrapSessionUpdate(msgOrUpdate);
   if (!u) return "";
-  return String(u.sessionUpdate || u.type || u.kind || "");
+  // Prefer ACP sessionUpdate / type only — `kind` is tool category (read/edit), not update type
+  return String(u.sessionUpdate || u.type || "");
 }
+
+/**
+ * Merge a tool_call_update into prior tool state without wiping body fields
+ * when the update is sparse (status-only, empty content array, etc.).
+ * @param {Record<string, unknown>} prev
+ * @param {Record<string, unknown>} update
+ * @returns {Record<string, unknown>}
+ */
+export function mergeToolUpdate(prev, update) {
+  const p = prev && typeof prev === "object" ? prev : {};
+  const u = update && typeof update === "object" ? update : {};
+  const merged = { ...p, ...u };
+
+  const keepIfEmpty = (key) => {
+    const next = u[key];
+    const prior = p[key];
+    if (prior == null) return;
+    if (next == null) {
+      merged[key] = prior;
+      return;
+    }
+    if (Array.isArray(next) && next.length === 0 && Array.isArray(prior) && prior.length) {
+      merged[key] = prior;
+      return;
+    }
+    if (
+      typeof next === "object" &&
+      !Array.isArray(next) &&
+      Object.keys(next).length === 0 &&
+      typeof prior === "object" &&
+      prior &&
+      Object.keys(/** @type {object} */ (prior)).length
+    ) {
+      merged[key] = prior;
+    }
+    if (typeof next === "string" && !next.trim() && typeof prior === "string" && prior.trim()) {
+      merged[key] = prior;
+    }
+  };
+
+  for (const key of [
+    "content",
+    "locations",
+    "rawInput",
+    "raw_input",
+    "rawOutput",
+    "raw_output",
+    "input",
+    "output",
+  ]) {
+    keepIfEmpty(key);
+  }
+  return merged;
+}
+
+/** Max lines rendered in a single diff block (avoid freezing the tab). */
+export const MAX_DIFF_RENDER_LINES = 400;
 
 /**
  * Extract structured diff payloads from a tool update / content item /
@@ -245,21 +301,18 @@ export function extractDiffs(update) {
       o.type === "diff" && o.diff && typeof o.diff === "object"
         ? /** @type {Record<string, unknown>} */ (o.diff)
         : o;
+    // Prefer ACP / Grok Build names only — avoid bare `old`/`new` false positives
     const oldText =
       nested.oldText ??
       nested.old_text ??
       nested.oldString ??
       nested.old_string ??
-      nested.before ??
-      nested.old ??
       null;
     const newText =
       nested.newText ??
       nested.new_text ??
       nested.newString ??
       nested.new_string ??
-      nested.after ??
-      nested.new ??
       null;
     const unified =
       typeof nested.diff === "string"
@@ -328,16 +381,8 @@ export function extractDiffs(update) {
           continue;
         }
         const it = /** @type {Record<string, unknown>} */ (item);
-        if (
-          it.type === "diff" ||
-          it.path ||
-          it.oldText != null ||
-          it.newText != null ||
-          it.old_text != null ||
-          it.new_text != null
-        ) {
-          pushDiff(it);
-        }
+        // Always try pushDiff — no-ops when fields insufficient
+        pushDiff(it);
         // Nested content block carrying text that is a diff
         if (it.type === "content" && it.content && typeof it.content === "object") {
           const c = /** @type {Record<string, unknown>} */ (it.content);
@@ -375,24 +420,10 @@ export function extractDiffs(update) {
       const v = u[key];
       if (v && typeof v === "object") {
         const r = /** @type {Record<string, unknown>} */ (v);
-        // fields may nest again
         if (r.fields && typeof r.fields === "object") {
           pushDiff(r.fields);
         }
         pushDiff(r);
-        if (
-          r.path ||
-          r.file_path ||
-          r.filePath ||
-          r.oldText != null ||
-          r.newText != null ||
-          r.old_string != null ||
-          r.new_string != null ||
-          r.diff != null ||
-          r.patch != null
-        ) {
-          pushDiff(r);
-        }
       } else if (typeof v === "string" && looksLikeUnifiedDiff(v)) {
         diffs.push({ path: guessPathFromUnified(v) || "diff", unified: v });
       }
@@ -404,10 +435,10 @@ export function extractDiffs(update) {
     });
   }
 
-  // Dedupe by path+unified/old/new
+  // Dedupe by path + lengths (avoid holding full text twice in the key)
   const seen = new Set();
   return diffs.filter((d) => {
-    const key = `${d.path}|${d.unified || ""}|${d.oldText || ""}|${d.newText || ""}`;
+    const key = `${d.path}|u${(d.unified || "").length}|o${(d.oldText || "").length}|n${(d.newText || "").length}|${(d.oldText || "").slice(0, 24)}|${(d.newText || "").slice(0, 24)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -431,8 +462,9 @@ function guessPathFromUnified(unified) {
 export function extractTextSnippets(update) {
   /** @type {string[]} */
   const out = [];
-  if (!update || typeof update !== "object") return out;
-  const u = /** @type {Record<string, unknown>} */ (update);
+  const unwrapped = unwrapSessionUpdate(update) || update;
+  if (!unwrapped || typeof unwrapped !== "object") return out;
+  const u = /** @type {Record<string, unknown>} */ (unwrapped);
   const content = u.content;
   if (Array.isArray(content)) {
     for (const item of content) {
@@ -469,7 +501,19 @@ export function renderDiffLines(container, lines) {
   container.classList.add("diff-view");
   container.replaceChildren();
   const frag = document.createDocumentFragment();
-  for (const line of lines) {
+  const max = MAX_DIFF_RENDER_LINES;
+  const slice =
+    lines.length > max
+      ? [
+          ...lines.slice(0, Math.floor(max / 2)),
+          {
+            kind: /** @type {const} */ ("hunk"),
+            text: `@@ … truncated ${lines.length - max} lines … @@`,
+          },
+          ...lines.slice(lines.length - Math.floor(max / 2)),
+        ]
+      : lines;
+  for (const line of slice) {
     const el = document.createElement("div");
     el.className = `diff-line diff-${line.kind === "ctx" ? "ctx" : line.kind}`;
     el.textContent = line.text;
@@ -640,7 +684,29 @@ export function upsertToolCard(existing, update) {
     card.appendChild(section);
   }
 
-  if (rawInput != null && rawInput !== "") {
+  // Skip raw input when it only duplicates the rendered diff (search_replace)
+  const inputIsOnlyDiff =
+    diffs.length > 0 &&
+    rawInput &&
+    typeof rawInput === "object" &&
+    Object.keys(/** @type {object} */ (rawInput)).every((k) =>
+      [
+        "path",
+        "file_path",
+        "filePath",
+        "old_string",
+        "new_string",
+        "oldString",
+        "newString",
+        "oldText",
+        "newText",
+        "old_text",
+        "new_text",
+        "diff",
+        "patch",
+      ].includes(k),
+    );
+  if (rawInput != null && rawInput !== "" && !inputIsOnlyDiff) {
     const section = detailsSection("input", prettyJson(rawInput), {
       open: wasOpen.has("input"),
       mono: true,
@@ -648,7 +714,7 @@ export function upsertToolCard(existing, update) {
     card.appendChild(section);
   }
 
-  // Avoid duplicating rawOutput when we already showed text/diff from content
+  // rawOutput: show as diff when unified; skip duplicate "raw output" if already have diffs from it
   if (rawOutput != null && rawOutput !== "" && !texts.length && !diffs.length) {
     const asStr = typeof rawOutput === "string" ? rawOutput : prettyJson(rawOutput);
     if (looksLikeUnifiedDiff(asStr)) {
@@ -665,7 +731,13 @@ export function upsertToolCard(existing, update) {
         }),
       );
     }
-  } else if (rawOutput != null && rawOutput !== "" && (texts.length || diffs.length)) {
+  } else if (
+    rawOutput != null &&
+    rawOutput !== "" &&
+    texts.length &&
+    !diffs.length
+  ) {
+    // Non-diff raw alongside text snippets
     card.appendChild(
       detailsSection("raw output", prettyJson(rawOutput), {
         open: wasOpen.has("raw output"),
@@ -673,6 +745,7 @@ export function upsertToolCard(existing, update) {
       }),
     );
   }
+  // If diffs already rendered from rawOutput, do not add redundant raw section
 
   // Fallback: unknown shape with extra fields
   const known = new Set([
@@ -696,12 +769,19 @@ export function upsertToolCard(existing, update) {
     "tool_name",
     "name",
     "path",
+    "file_path",
+    "filePath",
     "oldText",
     "newText",
     "old_text",
     "new_text",
+    "old_string",
+    "new_string",
+    "oldString",
+    "newString",
     "diff",
     "patch",
+    "fields",
   ]);
   const extra = {};
   let hasExtra = false;

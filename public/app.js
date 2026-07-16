@@ -1,4 +1,8 @@
-import { upsertToolCard, upsertPlanCard } from "./cards.js";
+import {
+  upsertToolCard,
+  upsertPlanCard,
+  mergeToolUpdate,
+} from "./cards.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -616,15 +620,7 @@ function handleAcp(tabId, msg) {
     );
     const key = toolCallId || `__anon_${st.toolCards.size}`;
     const prev = st.toolState.get(key) || {};
-    // Merge partial tool_call_update into stored state
-    const merged = { ...prev, ...update };
-    // Prefer non-empty content arrays; keep previous if update omits body
-    if (
-      update.content == null &&
-      prev.content != null
-    ) {
-      merged.content = prev.content;
-    }
+    const merged = mergeToolUpdate(prev, update);
     st.toolState.set(key, merged);
 
     const existing = st.toolCards.get(key) || null;
@@ -640,19 +636,25 @@ function handleAcp(tabId, msg) {
     mountTabCard(st, card, !existing);
     return;
   }
-  // Grok Build diff review payload — render as a tool-style card with diffs
+  // Grok Build diff review — upsert by stable id when present
   if (kind === "diff_review") {
-    const key = `__diff_review_${st.toolCards.size}`;
-    const synthetic = {
+    const toolCallId = String(
+      update.toolCallId || update.tool_call_id || update.id || "diff_review",
+    );
+    const key = toolCallId.startsWith("__") ? toolCallId : `diff_review:${toolCallId}`;
+    const prev = st.toolState.get(key) || {};
+    const synthetic = mergeToolUpdate(prev, {
       ...update,
-      title: update.title || "Diff review",
+      title: update.title || prev.title || "Diff review",
       kind: "diff_review",
-      status: update.status || "completed",
-      toolCallId: update.toolCallId || key,
-    };
-    const card = upsertToolCard(null, synthetic);
+      status: update.status || prev.status || "completed",
+      toolCallId: key,
+    });
+    st.toolState.set(key, synthetic);
+    const existing = st.toolCards.get(key) || null;
+    const card = upsertToolCard(existing, synthetic);
     st.toolCards.set(key, card);
-    mountTabCard(st, card, true);
+    mountTabCard(st, card, !existing);
   }
 }
 

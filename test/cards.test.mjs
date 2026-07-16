@@ -11,6 +11,7 @@ import {
   lineDiff,
   unwrapSessionUpdate,
   sessionUpdateKind,
+  mergeToolUpdate,
 } from "../public/cards.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -38,11 +39,77 @@ describe("looksLikeUnifiedDiff / lineDiff", () => {
     assert.equal(looksLikeUnifiedDiff(p), true);
   });
 
+  it("does not treat shell +/- logs as diffs", () => {
+    const log = "- waiting\n+ running\n- done\n+ ok\n";
+    assert.equal(looksLikeUnifiedDiff(log), false);
+    assert.equal(extractDiffs({ content: [{ type: "content", content: { type: "text", text: log } }] }).length, 0);
+  });
+
   it("lineDiff marks adds and dels", () => {
     const lines = lineDiff("a\nb\n", "a\nc\n");
     const kinds = lines.map((l) => l.kind);
     assert.ok(kinds.includes("del"));
     assert.ok(kinds.includes("add"));
+  });
+});
+
+describe("mergeToolUpdate", () => {
+  it("preserves content when update has empty array", () => {
+    const prev = {
+      toolCallId: "t1",
+      status: "pending",
+      content: [{ type: "diff", path: "a.js", oldText: "a", newText: "b" }],
+    };
+    const next = mergeToolUpdate(prev, {
+      toolCallId: "t1",
+      status: "in_progress",
+      content: [],
+    });
+    assert.equal(next.status, "in_progress");
+    assert.equal(next.content.length, 1);
+    assert.equal(extractDiffs(next).length, 1);
+  });
+
+  it("preserves rawInput when status-only update", () => {
+    const prev = {
+      rawInput: { file_path: "x", old_string: "a", new_string: "b" },
+      status: "pending",
+    };
+    const next = mergeToolUpdate(prev, { status: "completed" });
+    assert.deepEqual(next.rawInput, prev.rawInput);
+    assert.equal(extractDiffs(next).length, 1);
+  });
+});
+
+describe("extractDiffs edge cases", () => {
+  it("content[] with file_path + old_string (no type:diff)", () => {
+    const diffs = extractDiffs({
+      sessionUpdate: "tool_call",
+      content: [
+        {
+          file_path: "lib/x.mjs",
+          old_string: "const a = 1;\n",
+          new_string: "const a = 2;\n",
+        },
+      ],
+    });
+    assert.equal(diffs.length, 1);
+    assert.equal(diffs[0].path, "lib/x.mjs");
+  });
+
+  it("does not treat { path, new: true } as a text diff", () => {
+    const diffs = extractDiffs({
+      path: "foo.js",
+      new: true,
+      old: false,
+    });
+    assert.equal(diffs.length, 0);
+  });
+
+  it("extractTextSnippets unwraps full notifications", () => {
+    const msg = load("tool-call-read.json");
+    const texts = extractTextSnippets(msg);
+    assert.ok(texts.some((t) => t.includes("Anonymized")));
   });
 });
 

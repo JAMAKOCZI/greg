@@ -689,6 +689,37 @@ function recordAcpForTranscript(tabId, entry, msg) {
         }
       })
       .catch(() => {});
+    return;
+  }
+
+  if (kind === "diff_review") {
+    const content = Array.isArray(update.content) ? update.content : [];
+    const paths = content
+      .map((c) => (c && typeof c === "object" ? c.path : null))
+      .filter(Boolean);
+    const text =
+      paths.length > 0
+        ? `Diff review · ${paths.join(", ")}`
+        : "Diff review";
+    void transcripts
+      .upsertToolMessage(tabId, {
+        text,
+        meta: { kind: "diff_review", paths },
+      })
+      .then(async (doc) => {
+        if (!doc) {
+          await ensureTranscript(tabId, {
+            cwd: entry.cwd,
+            title: entry.title,
+            createdAt: entry.createdAt,
+          });
+          await transcripts.upsertToolMessage(tabId, {
+            text,
+            meta: { kind: "diff_review", paths },
+          });
+        }
+      })
+      .catch(() => {});
   }
 }
 
