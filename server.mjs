@@ -13,6 +13,7 @@ import {
   readJson,
 } from "./lib/http.mjs";
 import { AcpBridge, newClientSessionId } from "./lib/acp-bridge.mjs";
+import { titleFromPrompt } from "./lib/text.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
@@ -235,16 +236,6 @@ const server = createGregServer({
     return false;
   },
 });
-
-/**
- * @param {string} text
- * @returns {string}
- */
-function titleFromPrompt(text) {
-  const oneLine = text.replace(/\s+/g, " ").trim();
-  if (oneLine.length <= 40) return oneLine;
-  return oneLine.slice(0, 40).trimEnd() + "…";
-}
 
 /**
  * @param {string} tabId
