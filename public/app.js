@@ -26,8 +26,6 @@ const els = {
 
 /** @type {string|null} */
 let activeTabId = null;
-/** @type {boolean} */
-let sending = false;
 
 /**
  * Per-tab client state.
@@ -47,6 +45,8 @@ let sending = false;
  *   toolCards: Map<string, HTMLElement>,
  *   toolState: Map<string, Record<string, unknown>>,
  *   planCard: HTMLElement|null,
+ *   sending: boolean,
+ *   cancelHttpInflight: boolean,
  * }} TabState
  * @type {Map<string, TabState>}
  */
@@ -239,6 +239,8 @@ function ensureTabState(meta) {
       toolCards: new Map(),
       toolState: new Map(),
       planCard: null,
+      sending: false,
+      cancelHttpInflight: false,
     };
     tabStates.set(meta.tabId, st);
   } else {
@@ -249,6 +251,8 @@ function ensureTabState(meta) {
     if (meta.lastActiveAt != null) st.lastActiveAt = meta.lastActiveAt;
     if (!st.toolCards) st.toolCards = new Map();
     if (!st.toolState) st.toolState = new Map();
+    if (st.sending === undefined) st.sending = false;
+    if (st.cancelHttpInflight === undefined) st.cancelHttpInflight = false;
   }
   return st;
 }
@@ -288,9 +292,11 @@ function renderSessionList() {
     pick.type = "button";
     pick.className = "session-pick";
     pick.title = st.cwd || st.tabId;
+    if (st.sending) row.classList.add("busy");
+    const busyTag = st.sending ? " · running" : "";
     pick.innerHTML = `
       <span class="session-title">${escapeHtml(displayTitle(st))}</span>
-      <span class="session-sub">${escapeHtml(cwdBase(st.cwd) || shortId(st.tabId))}${st.alive ? "" : " · dead"} · ${escapeHtml(shortId(st.tabId))}</span>
+      <span class="session-sub">${escapeHtml(cwdBase(st.cwd) || shortId(st.tabId))}${st.alive ? "" : " · dead"}${busyTag} · ${escapeHtml(shortId(st.tabId))}</span>
     `;
     pick.addEventListener("click", () => {
       switchToTab(st.tabId);
@@ -832,28 +838,65 @@ async function answerPermission(tabId, card, requestId, opt) {
 
 // ── Session / composer ───────────────────────────────────────
 
-function setComposerEnabled(on) {
+/**
+ * Refresh composer/cancel/status from the *active* tab only.
+ * Background tabs keep their own `sending` flags independently.
+ */
+function refreshActiveComposer() {
+  const st = activeState();
+  if (!st) {
+    els.prompt.disabled = true;
+    els.btnSend.disabled = true;
+    setCancelVisible(false);
+    els.hint.textContent = "Create a session to start";
+    return;
+  }
+
+  const on = st.alive;
+  const busy = Boolean(st.sending);
   els.prompt.disabled = !on;
-  els.btnSend.disabled = !on || sending;
-  els.hint.textContent = on
-    ? sending
-      ? "Running… Cancel or Ctrl+. to stop the turn"
-      : "Enter to send · ⌘/Ctrl+Enter · Ctrl+. cancel · Esc focus"
-    : activeTabId
+  els.btnSend.disabled = !on || busy;
+  setCancelVisible(on && busy);
+  if (els.btnCancel) {
+    // Allow re-notify while busy; only disable during cancel HTTP round-trip
+    els.btnCancel.disabled = !on || !busy || st.cancelHttpInflight;
+  }
+
+  if (!on) {
+    els.hint.textContent =
+      "Session stopped — pick a live tab or start a new one";
+  } else if (busy) {
+    els.hint.textContent =
+      "Running… Cancel or Ctrl+. to stop the turn (Stop session forces kill)";
+  } else {
+    els.hint.textContent =
+      "Enter to send · ⌘/Ctrl+Enter · Ctrl+. cancel · Esc focus";
+  }
+}
+
+/** @deprecated use refreshActiveComposer — kept for call sites that pass bool */
+function setComposerEnabled(on) {
+  if (!on) {
+    els.prompt.disabled = true;
+    els.btnSend.disabled = true;
+    setCancelVisible(false);
+    const st = activeState();
+    els.hint.textContent = st
       ? "Session stopped — pick a live tab or start a new one"
       : "Create a session to start";
-  setCancelEnabled(on && sending);
+    return;
+  }
+  refreshActiveComposer();
 }
 
 function setStopEnabled(on) {
   if (els.btnStop) els.btnStop.disabled = !on;
 }
 
-/** Cancel turn control — visible only while a prompt is in flight. */
-function setCancelEnabled(on) {
+/** @param {boolean} visible */
+function setCancelVisible(visible) {
   if (!els.btnCancel) return;
-  els.btnCancel.hidden = !on;
-  els.btnCancel.disabled = !on;
+  els.btnCancel.hidden = !visible;
 }
 
 /**
@@ -878,12 +921,14 @@ function switchToTab(tabId) {
 
   if (next.alive) connectStream(next);
   updateSessionLabel(next);
-  setComposerEnabled(next.alive);
   setStopEnabled(next.alive);
-  setStatus(
-    next.alive ? "ready" : "idle",
-    next.alive ? "Ready" : "Disconnected",
-  );
+  refreshActiveComposer();
+  if (next.alive) {
+    if (next.sending) setStatus("busy", "Running…");
+    else setStatus("ready", "Ready");
+  } else {
+    setStatus("idle", "Disconnected");
+  }
   renderSessionList();
   if (next.alive) els.prompt.focus();
 }
@@ -1029,17 +1074,19 @@ async function stopSession(tabId = activeTabId) {
 async function sendPrompt() {
   const text = els.prompt.value.trim();
   const st = activeState();
-  if (!text || !st || !st.alive || sending) return;
+  if (!text || !st || !st.alive || st.sending) return;
 
   els.prompt.value = "";
   st.draft = "";
   resetLive(st);
   appendBubble(st, "user", text, { role: "you" });
-  setStatus("busy", "Running…");
-  sending = true;
-  els.btnSend.disabled = true;
-  setCancelEnabled(true);
-  setComposerEnabled(true);
+  st.sending = true;
+  st.cancelHttpInflight = false;
+  if (st.tabId === activeTabId) {
+    setStatus("busy", "Running…");
+    refreshActiveComposer();
+  }
+  renderSessionList();
 
   if (!st.title) {
     const oneLine = text.replace(/\s+/g, " ").trim();
@@ -1058,51 +1105,76 @@ async function sendPrompt() {
     if (data.title) st.title = data.title;
     if (data.lastActiveAt) st.lastActiveAt = data.lastActiveAt;
     updateSessionLabel(st);
-    renderSessionList();
-    if (st.alive && st.tabId === activeTabId) {
-      const cancelled = data.result?.stopReason === "cancelled";
-      if (cancelled) {
-        appendBubble(st, "system", "Turn cancelled");
-        setStatus("ready", "Cancelled");
-      } else {
-        setStatus("ready", "Ready");
-      }
+
+    const cancelled = data.result?.stopReason === "cancelled";
+    if (cancelled) {
+      // Always record on this tab's transcript (may be parked)
+      appendBubble(st, "system", "Turn cancelled");
+    }
+    if (st.tabId === activeTabId) {
+      if (cancelled) setStatus("ready", "Cancelled");
+      else if (st.alive) setStatus("ready", "Ready");
     }
   } catch (e) {
-    if (st.tabId === activeTabId) setStatus("error", "Error");
     appendBubble(st, "system", e.message);
+    if (st.tabId === activeTabId) setStatus("error", "Error");
   } finally {
-    sending = false;
+    st.sending = false;
+    st.cancelHttpInflight = false;
+    renderSessionList();
     if (st.tabId === activeTabId) {
-      setCancelEnabled(false);
-      els.btnSend.disabled = !st.alive;
-      setComposerEnabled(st.alive);
-      els.prompt.focus();
+      refreshActiveComposer();
+      if (st.alive) els.prompt.focus();
     }
   }
 }
 
 /**
  * Interrupt the in-flight agent turn (session stays open).
+ * Targets the tab that is actually sending when called without tabId.
  * @param {string} [tabId]
  */
-async function cancelTurn(tabId = activeTabId) {
-  if (!tabId || !sending) return;
-  const st = tabStates.get(tabId);
-  if (!st?.alive) return;
-
-  if (els.btnCancel) els.btnCancel.disabled = true;
-  try {
-    await api("/api/cancel", {
-      method: "POST",
-      body: JSON.stringify({ tabId, reason: "user" }),
-    });
-    if (tabId === activeTabId) setStatus("busy", "Cancelling…");
-  } catch (e) {
-    if (tabId === activeTabId) {
-      appendBubble(st, "system", `Cancel failed: ${e.message}`);
-      setCancelEnabled(true);
+async function cancelTurn(tabId) {
+  let targetId = tabId;
+  if (!targetId) {
+    const active = activeState();
+    if (active?.sending) targetId = active.tabId;
+    else {
+      // Prefer explicit busy tab if active is idle
+      for (const t of tabStates.values()) {
+        if (t.sending && t.alive) {
+          targetId = t.tabId;
+          break;
+        }
+      }
     }
+  }
+  if (!targetId) return;
+  const st = tabStates.get(targetId);
+  if (!st?.alive || !st.sending) return;
+  if (st.cancelHttpInflight) return;
+
+  st.cancelHttpInflight = true;
+  if (targetId === activeTabId) refreshActiveComposer();
+
+  try {
+    const data = await api("/api/cancel", {
+      method: "POST",
+      body: JSON.stringify({ tabId: targetId, reason: "user" }),
+    });
+    if (targetId === activeTabId) {
+      if (data.hadPending === false) {
+        setStatus("busy", "Cancel sent (no pending turn on agent)");
+      } else {
+        setStatus("busy", "Cancelling…");
+      }
+    }
+  } catch (e) {
+    appendBubble(st, "system", `Cancel failed: ${e.message}`);
+    if (targetId === activeTabId) setStatus("error", "Cancel failed");
+  } finally {
+    st.cancelHttpInflight = false;
+    if (targetId === activeTabId) refreshActiveComposer();
   }
 }
 
@@ -1169,9 +1241,14 @@ els.prompt.addEventListener("input", () => {
 document.addEventListener("keydown", (e) => {
   // Ctrl+. — cancel in-flight turn (Codex-style interrupt)
   if (e.key === "." && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
-    if (sending && activeTabId) {
+    const active = activeState();
+    const busy =
+      (active?.sending && active.alive) ||
+      [...tabStates.values()].some((t) => t.sending && t.alive);
+    if (busy) {
       e.preventDefault();
-      cancelTurn(activeTabId);
+      // Prefer active tab if it is the one running
+      cancelTurn(active?.sending ? active.tabId : undefined);
     }
     return;
   }

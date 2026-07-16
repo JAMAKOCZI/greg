@@ -262,6 +262,10 @@ body {
   background: transparent;
 }
 
+.session-item.busy .session-sub {
+  color: var(--warn);
+}
+
 .session-item.active {
   border-color: rgba(167, 139, 250, 0.35);
   background: rgba(167, 139, 250, 0.08);

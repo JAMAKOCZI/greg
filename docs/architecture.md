@@ -54,8 +54,10 @@ Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests
 - This is a **notification** (no JSON-RPC response id).
 - Greg: `AcpBridge.cancel()` → `POST /api/cancel` → UI **Cancel** / `Ctrl+.`.
 - Expected agent behavior: end the in-flight `session/prompt` with `stopReason: "cancelled"`; keep the session process alive.
-- Mock agent honors cancel mid-stream when `MOCK_STREAM_MS > 0` (or if cancel arrives before the final result).
-- Fallback if a future agent ignores cancel: kill/respawn (not implemented; worse UX).
+- API returns `hadPending` (whether a prompt was in flight on the bridge when cancel was sent).
+- UI tracks **per-tab** `sending` so multi-session cancel/composer stay correct.
+- Mock agent: cooperative cancel via microtask yields between chunks (`MOCK_STREAM_MS` only paces UX demos; not required for cancel). Sticky cancel applies only when a prompt is queued/in-flight, not pure idle.
+- If a real agent ignores cancel, the prompt request stays pending (bridge timeout 30m); use **Stop session** to force-kill. Cancel can be re-sent while still busy.
 
 ## Roadmap (product)
 

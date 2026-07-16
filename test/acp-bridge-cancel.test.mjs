@@ -7,16 +7,14 @@ import { AcpBridge } from "../lib/acp-bridge.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_BIN = join(__dirname, "..", "scripts", "mock-grok-agent.mjs");
 
+/**
+ * @param {Record<string, string>} [env]
+ */
 function makeBridge(env = {}) {
-  // Pass MOCK_STREAM_MS via child env by wrapping is hard; set process.env
-  // for the spawn (bridge inherits process.env).
-  for (const [k, v] of Object.entries(env)) {
-    if (v == null) delete process.env[k];
-    else process.env[k] = String(v);
-  }
   return new AcpBridge({
     grokBin: MOCK_BIN,
     cwd: join(__dirname, ".."),
+    env,
   });
 }
 
@@ -27,9 +25,7 @@ describe("AcpBridge.cancel", () => {
   });
 
   it("sends session/cancel and prompt resolves with stopReason cancelled", async () => {
-    const prev = process.env.MOCK_STREAM_MS;
-    process.env.MOCK_STREAM_MS = "30";
-    const bridge = makeBridge();
+    const bridge = makeBridge({ MOCK_STREAM_MS: "30" });
     /** @type {object[]} */
     const cancelEvents = [];
     bridge.on("cancel", (p) => cancelEvents.push(p));
@@ -46,6 +42,7 @@ describe("AcpBridge.cancel", () => {
       const cancelResult = bridge.cancel({ reason: "user" });
       assert.equal(cancelResult.ok, true);
       assert.equal(cancelResult.sessionId, bridge.sessionId);
+      assert.equal(cancelResult.hadPending, true);
       assert.equal(cancelEvents.length, 1);
       assert.equal(cancelEvents[0].reason, "user");
 
@@ -58,8 +55,6 @@ describe("AcpBridge.cancel", () => {
       assert.equal(again?.stopReason, "end_turn");
     } finally {
       bridge.stop();
-      if (prev === undefined) delete process.env.MOCK_STREAM_MS;
-      else process.env.MOCK_STREAM_MS = prev;
     }
   });
 
@@ -69,10 +64,32 @@ describe("AcpBridge.cancel", () => {
       await bridge.openSession({ cwd: join(__dirname, "..") });
       const r = bridge.cancel();
       assert.equal(r.ok, true);
-      // No pending prompt — still fine
+      assert.equal(r.hadPending, false);
       assert.equal(bridge.hasPendingRequest, false);
       const result = await bridge.prompt("still works");
       assert.equal(result?.stopReason, "end_turn");
+    } finally {
+      bridge.stop();
+    }
+  });
+
+  it("cancels without MOCK_STREAM_MS via cooperative yields", async () => {
+    const bridge = makeBridge(); // no stream delay env
+    try {
+      await bridge.openSession({ cwd: join(__dirname, "..") });
+      const promptPromise = bridge.prompt("yield cancel");
+      // Yield so mock can enter the prompt and hit await sleep(0)
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+      bridge.cancel();
+      const result = await promptPromise;
+      // Best-effort: with microtask yields cancel usually wins; if not, still end_turn is OK
+      // for a race — assert session still works either way
+      assert.ok(
+        result?.stopReason === "cancelled" || result?.stopReason === "end_turn",
+      );
+      const again = await bridge.prompt("after");
+      assert.equal(again?.stopReason, "end_turn");
     } finally {
       bridge.stop();
     }

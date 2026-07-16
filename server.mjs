@@ -183,11 +183,16 @@ const server = createGregServer({
         return true;
       }
       try {
+        const hadPending = entry.bridge.hasPendingRequest;
         const result = entry.bridge.cancel({
           reason: typeof body.reason === "string" ? body.reason : "user",
         });
         tabs.touch(body.tabId);
-        json(res, 200, { ok: true, ...result });
+        json(res, 200, {
+          ok: true,
+          hadPending,
+          ...result,
+        });
       } catch (err) {
         json(res, 502, { error: err.message || String(err) });
       }

@@ -6,7 +6,7 @@
  * Usage with Greg:
  *   GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start
  *
- * Optional slow streaming (cancel tests):
+ * Streaming pace (optional; cancel works with default via microtask yields):
  *   MOCK_STREAM_MS=40 GROK_BIN=./scripts/mock-grok-agent.mjs …
  *
  * Spawned as: <this-script> agent stdio  (extra argv is ignored)
@@ -17,7 +17,7 @@ import { randomUUID } from "node:crypto";
 /** @type {string|null} */
 let sessionId = null;
 
-/** Delay between streamed updates; 0 = synchronous (default). */
+/** Delay between streamed updates; 0 still yields a microtask so cancel can run. */
 const STREAM_MS = Math.max(0, Number(process.env.MOCK_STREAM_MS || 0) || 0);
 
 /**
@@ -27,6 +27,8 @@ const STREAM_MS = Math.max(0, Number(process.env.MOCK_STREAM_MS || 0) || 0);
 let activeTurn = null;
 /** @type {boolean} */
 let cancelRequested = false;
+/** Count of session/prompt requests received but not yet finished. */
+let promptDepth = 0;
 
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 
@@ -56,7 +58,6 @@ rl.on("line", (line) => {
     if (msg.method === "session/cancel") {
       handleCancel(msg.params || {});
     }
-    // initialized etc. ignored
     return;
   }
 
@@ -64,9 +65,16 @@ rl.on("line", (line) => {
   const id = msg.id;
   const params = msg.params || {};
 
+  if (method === "session/prompt") {
+    promptDepth++;
+  }
+
   queue = queue
     .then(() => handleRequest(method, id, params))
     .catch((err) => {
+      if (method === "session/prompt") {
+        promptDepth = Math.max(0, promptDepth - 1);
+      }
       write({
         jsonrpc: "2.0",
         id,
@@ -87,10 +95,15 @@ rl.on("close", () => {
  */
 function handleCancel(params) {
   const sid = params.sessionId || sessionId;
-  // Match any active turn for this session (or missing sessionId = all)
-  if (!activeTurn) return;
-  if (sid && activeTurn.sessionId && sid !== activeTurn.sessionId) return;
-  cancelRequested = true;
+  if (activeTurn) {
+    if (sid && activeTurn.sessionId && sid !== activeTurn.sessionId) return;
+    cancelRequested = true;
+    return;
+  }
+  // Sticky only when a prompt is queued or about to start (not pure idle)
+  if (promptDepth > 0) {
+    cancelRequested = true;
+  }
 }
 
 /**
@@ -105,7 +118,7 @@ async function handleRequest(method, id, params) {
       id,
       result: {
         protocolVersion: params.protocolVersion ?? 1,
-        serverInfo: { name: "mock-grok-agent", version: "0.0.3" },
+        serverInfo: { name: "mock-grok-agent", version: "0.0.4" },
         agentCapabilities: {},
       },
     });
@@ -125,8 +138,11 @@ async function handleRequest(method, id, params) {
   if (method === "session/prompt") {
     const sid = params.sessionId || sessionId;
     const toolCallId = `mock-tool-${randomUUID()}`;
-    cancelRequested = false;
+    // Keep sticky cancelRequested if cancel arrived while queued
     activeTurn = { promptId: id, sessionId: sid };
+
+    // Always yield once so a cancel sent right after prompt can land
+    await sleep(0);
 
     const updates = [
       {
@@ -167,25 +183,25 @@ async function handleRequest(method, id, params) {
       },
     ];
 
-    let cancelled = false;
+    let cancelled = cancelRequested;
     for (const update of updates) {
       if (cancelRequested) {
         cancelled = true;
         break;
       }
       notify("session/update", { sessionId: sid, update });
-      if (STREAM_MS > 0) {
-        await sleep(STREAM_MS);
-        if (cancelRequested) {
-          cancelled = true;
-          break;
-        }
+      // STREAM_MS=0 → microtask yield; >0 → paced stream for cancel UX demos
+      await sleep(STREAM_MS);
+      if (cancelRequested) {
+        cancelled = true;
+        break;
       }
     }
 
     activeTurn = null;
     const wasCancelled = cancelled || cancelRequested;
     cancelRequested = false;
+    promptDepth = Math.max(0, promptDepth - 1);
 
     write({
       jsonrpc: "2.0",
@@ -208,7 +224,10 @@ async function handleRequest(method, id, params) {
  * @param {number} ms
  */
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    if (ms > 0) setTimeout(resolve, ms);
+    else setImmediate(resolve);
+  });
 }
 
 /**

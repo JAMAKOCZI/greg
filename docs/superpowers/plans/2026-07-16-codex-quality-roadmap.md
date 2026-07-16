@@ -446,6 +446,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **0 complete** | Test harness, mock agent, `lib/tabs` + `lib/text`; v0.2.1; 14 tests green |
 | 2026-07-16 | **0 review fixes** | Code review on Phase 0: unique mock tool ids, safe TabRegistry.create, endSse on open fail, fixture tests, MOCK_STREAM_MS, npm test glob, check covers mock (17 tests) |
 | 2026-07-16 | **1 complete** | `session/cancel` notification; bridge + mock + `/api/cancel` + Cancel/Ctrl+.; v0.3.0 |
+| 2026-07-16 | **1 review fixes** | Per-tab sending, always park cancel bubble, mock yields + sticky queued cancel, bridge env, hadPending, re-cancel while busy |
 
 ---
 

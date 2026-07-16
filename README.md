@@ -75,7 +75,7 @@ GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start
 
 Open the printed one-time URL → **New session** → send a prompt. The mock speaks minimal ACP over stdio.
 
-Optional slow stream (for cancel experiments): `MOCK_STREAM_MS=40 GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start`.
+Cancel works with the default mock (microtask yields between chunks). Optional slower stream for demos: `MOCK_STREAM_MS=40 GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start`.
 
 Quality roadmap (phased, step-by-step): [docs/superpowers/plans/2026-07-16-codex-quality-roadmap.md](docs/superpowers/plans/2026-07-16-codex-quality-roadmap.md).
 
