@@ -891,6 +891,33 @@ function closeStream(st) {
   }
 }
 
+/**
+ * Stable key for tool cards. Prefer ACP ids; otherwise reuse the last open
+ * anonymous card of the same title so updates merge instead of stacking.
+ * @param {TabState} st
+ * @param {Record<string, unknown>} update
+ */
+function toolCardKey(st, update) {
+  const id = String(
+    update.toolCallId || update.tool_call_id || update.id || "",
+  ).trim();
+  if (id) return id;
+
+  const title = String(update.title || update.toolName || update.kind || "tool");
+  // Prefer last incomplete anon card with same title
+  for (const [key, card] of st.toolCards) {
+    if (!String(key).startsWith("__anon:")) continue;
+    const prev = st.toolState.get(key) || {};
+    const prevTitle = String(prev.title || prev.toolName || prev.kind || "tool");
+    if (prevTitle !== title) continue;
+    const status = String(prev.status || "").toLowerCase();
+    if (!status || status === "pending" || status === "in_progress" || status === "running") {
+      return key;
+    }
+  }
+  return `__anon:${title}:${st.toolCards.size}`;
+}
+
 function handleAcp(tabId, msg) {
   const st = tabStates.get(tabId);
   if (!st) return;
@@ -900,7 +927,8 @@ function handleAcp(tabId, msg) {
   }
   const params = msg.params || {};
   const update = params.update || params.sessionUpdate || params;
-  const kind = update.sessionUpdate || update.type || update.kind;
+  // Align with cards.sessionUpdateKind — never treat tool category as update type
+  const kind = update.sessionUpdate || update.type || "";
 
   if (kind === "agent_message_chunk" || kind === "agent_message") {
     const chunk =
@@ -922,10 +950,9 @@ function handleAcp(tabId, msg) {
     return;
   }
   if (kind === "tool_call" || kind === "tool_call_update") {
-    const toolCallId = String(
-      update.toolCallId || update.tool_call_id || update.id || "",
-    );
-    const key = toolCallId || `__anon_${st.toolCards.size}`;
+    // Finalize live text bubbles so later chunks appear *after* the card
+    resetLive(st);
+    const key = toolCardKey(st, update);
     const prev = st.toolState.get(key) || {};
     const merged = mergeToolUpdate(prev, update);
     st.toolState.set(key, merged);
@@ -937,6 +964,7 @@ function handleAcp(tabId, msg) {
     return;
   }
   if (kind === "plan") {
+    resetLive(st);
     const existing = st.planCard;
     const card = upsertPlanCard(existing, update);
     st.planCard = card;
@@ -945,6 +973,7 @@ function handleAcp(tabId, msg) {
   }
   // Grok Build diff review — upsert by stable id when present
   if (kind === "diff_review") {
+    resetLive(st);
     const toolCallId = String(
       update.toolCallId || update.tool_call_id || update.id || "diff_review",
     );
@@ -1517,10 +1546,14 @@ async function openHistory(id) {
 
 /**
  * @param {{ role: string, text: string, ts?: number, meta?: object }} m
+ * @param {HTMLElement|DocumentFragment} [host] defaults to live transcript
  */
-function renderHistoryMessage(m) {
+function renderHistoryMessage(m, host = els.transcript) {
   const role = m.role || "system";
   const text = m.text || "";
+  const append = (div) => {
+    host.appendChild(div);
+  };
   if (role === "user") {
     const div = document.createElement("div");
     div.className = "bubble user";
@@ -1529,7 +1562,7 @@ function renderHistoryMessage(m) {
     r.textContent = "you";
     div.appendChild(r);
     div.appendChild(document.createTextNode(text));
-    els.transcript.appendChild(div);
+    append(div);
     return;
   }
   if (role === "agent") {
@@ -1540,7 +1573,7 @@ function renderHistoryMessage(m) {
     r.textContent = "greg";
     div.appendChild(r);
     div.appendChild(document.createTextNode(text));
-    els.transcript.appendChild(div);
+    append(div);
     return;
   }
   if (role === "thought") {
@@ -1551,7 +1584,7 @@ function renderHistoryMessage(m) {
     r.textContent = "thinking";
     div.appendChild(r);
     div.appendChild(document.createTextNode(text));
-    els.transcript.appendChild(div);
+    append(div);
     return;
   }
   if (role === "tool" || role === "plan") {
@@ -1562,20 +1595,54 @@ function renderHistoryMessage(m) {
     r.textContent = role;
     div.appendChild(r);
     div.appendChild(document.createTextNode(text));
-    els.transcript.appendChild(div);
+    append(div);
     return;
   }
   if (role === "permission") {
     const div = document.createElement("div");
     div.className = "bubble system";
     div.appendChild(document.createTextNode(text));
-    els.transcript.appendChild(div);
+    append(div);
     return;
   }
   const div = document.createElement("div");
   div.className = "bubble system";
   div.appendChild(document.createTextNode(text));
-  els.transcript.appendChild(div);
+  append(div);
+}
+
+/**
+ * Load durable transcript into a live tab's park/host (best-effort cards as text).
+ * @param {TabState} st
+ */
+async function loadTabTranscript(st) {
+  if (!st?.tabId) return;
+  try {
+    const doc = await api(`/api/history/${encodeURIComponent(st.tabId)}`);
+    const messages = doc.messages || [];
+    if (!messages.length) return;
+    const host =
+      st.tabId === activeTabId && !historyViewId
+        ? els.transcript
+        : (st.park ||= document.createDocumentFragment());
+    if (host === els.transcript) {
+      for (const child of [...els.transcript.children]) {
+        if (child !== els.emptyState) child.remove();
+      }
+    } else if (st.park) {
+      // park may already hold SSE-era nodes; prepend history only if empty
+      if (st.park.childNodes.length > 0) return;
+    }
+    for (const m of messages) {
+      renderHistoryMessage(m, host);
+    }
+    if (host === els.transcript) {
+      markTranscriptFilled();
+      scrollTranscript();
+    }
+  } catch {
+    /* history optional for live tabs */
+  }
 }
 
 async function loadHistoryList() {
@@ -1935,11 +2002,21 @@ async function hydrateSessions() {
     const list = data.tabs || [];
     for (const meta of list) {
       const st = ensureTabState(meta);
+      // Restore durable transcript before live stream so F5 isn't an empty pane
+      await loadTabTranscript(st);
       if (st.alive) connectStream(st);
     }
     renderSessionList();
     if (!activeTabId && list.length) {
       switchToTab(list[0].tabId);
+    } else if (activeTabId) {
+      const st = activeState();
+      if (st) {
+        // switchToTab may have been skipped; ensure active host has content
+        if (els.transcript && ![...els.transcript.children].some((c) => c !== els.emptyState)) {
+          await loadTabTranscript(st);
+        }
+      }
     }
   } catch {
     /* first paint without list is fine */

@@ -93,6 +93,12 @@ describe("resolveUnderRoot / listTree / readWorkspaceFile", () => {
     assert.equal(r.code, "EMPTY_ROOT");
   });
 
+  it("rejects filesystem root as workspace", async () => {
+    const r = await resolveUnderRoot("/", "etc");
+    assert.equal(r.ok, false);
+    assert.equal(r.code, "ROOT_FORBIDDEN");
+  });
+
   it("rejects path traversal with ..", async () => {
     const r = await resolveUnderRoot(root, "../outside.txt");
     assert.equal(r.ok, false);

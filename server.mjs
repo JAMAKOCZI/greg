@@ -11,7 +11,11 @@ import {
   json,
   readJson,
 } from "./lib/http.mjs";
-import { AcpBridge, newClientSessionId } from "./lib/acp-bridge.mjs";
+import {
+  AcpBridge,
+  newClientSessionId,
+  resolveGrokBin,
+} from "./lib/acp-bridge.mjs";
 import { TabRegistry } from "./lib/tabs.mjs";
 import {
   TranscriptStore,
@@ -35,7 +39,8 @@ import {
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
 const ENV_DEFAULT_CWD = process.env.GREG_CWD || process.cwd();
-const GROK_BIN = process.env.GROK_BIN || "grok";
+// Resolve relative GROK_BIN against Greg process cwd (not session workspace)
+const GROK_BIN = resolveGrokBin(process.env.GROK_BIN || "grok");
 const SESSIONS_DIR = process.env.GREG_SESSIONS_DIR || defaultSessionsDir();
 const RECENTS_PATH = process.env.GREG_RECENTS_PATH || defaultRecentsPath();
 const SETTINGS_PATH = process.env.GREG_SETTINGS_PATH || defaultSettingsPath();
@@ -416,6 +421,13 @@ const server = createGregServer({
         json(res, 404, { error: "Unknown tab — create a session first" });
         return true;
       }
+      if (entry.bridge.hasPendingRequest) {
+        json(res, 409, {
+          error: "A turn is already in progress on this session",
+          code: "BUSY",
+        });
+        return true;
+      }
       const text = (body.text || "").trim();
       if (!text) {
         json(res, 400, { error: "Empty prompt" });
@@ -572,23 +584,22 @@ function endSse(entry) {
  * @param {{ cwd: string, title?: string|null, createdAt?: number, restarted?: boolean }} opts
  */
 async function ensureTranscript(tabId, opts) {
-  const existing = await transcripts.load(tabId);
-  if (existing) {
-    if (opts.restarted) {
-      await transcripts.appendMessage(tabId, {
-        role: "system",
-        text: "Session restarted",
-      });
-    }
-    if (opts.title) await transcripts.setTitle(tabId, opts.title);
-    return existing;
-  }
-  return transcripts.create({
+  // Never overwrite: concurrent tool/plan upserts at session start must not wipe messages
+  const existingBefore = await transcripts.load(tabId);
+  const doc = await transcripts.ensure({
     id: tabId,
     cwd: opts.cwd,
     title: opts.title ?? null,
     createdAt: opts.createdAt,
   });
+  if (opts.restarted && existingBefore) {
+    await transcripts.appendMessage(tabId, {
+      role: "system",
+      text: "Session restarted",
+    });
+  }
+  if (opts.title) await transcripts.setTitle(tabId, opts.title);
+  return doc;
 }
 
 /**
@@ -665,7 +676,8 @@ function recordAcpForTranscript(tabId, entry, msg) {
   }
   const params = msg.params || {};
   const update = params.update || params.sessionUpdate || params;
-  const kind = update.sessionUpdate || update.type || update.kind;
+  // Never use tool category `kind` (read/edit) as session update type
+  const kind = update.sessionUpdate || update.type || "";
 
   if (kind === "agent_message_chunk" || kind === "agent_message") {
     const chunk =
@@ -689,6 +701,10 @@ function recordAcpForTranscript(tabId, entry, msg) {
   }
 
   if (kind === "tool_call" || kind === "tool_call_update") {
+    // Flush text buffers so history order matches interleaving
+    void flushThoughtBuffer(tabId, entry).then(() =>
+      flushAgentBuffer(tabId, entry),
+    );
     const title =
       update.title || update.toolCallId || update.toolName || update.kind || "tool";
     const status = update.status || "";
@@ -725,6 +741,9 @@ function recordAcpForTranscript(tabId, entry, msg) {
   }
 
   if (kind === "plan") {
+    void flushThoughtBuffer(tabId, entry).then(() =>
+      flushAgentBuffer(tabId, entry),
+    );
     const entries = update.entries || update.plan || [];
     const text = Array.isArray(entries)
       ? entries
@@ -748,6 +767,9 @@ function recordAcpForTranscript(tabId, entry, msg) {
   }
 
   if (kind === "diff_review") {
+    void flushThoughtBuffer(tabId, entry).then(() =>
+      flushAgentBuffer(tabId, entry),
+    );
     const content = Array.isArray(update.content) ? update.content : [];
     const paths = content
       .map((c) => (c && typeof c === "object" ? c.path : null))
@@ -784,7 +806,13 @@ function recordAcpForTranscript(tabId, entry, msg) {
  */
 function wireBridge(tabId, entry) {
   const { bridge } = entry;
+  /** @returns {boolean} true if this bridge is still the live tab bridge */
+  const isCurrent = () => {
+    const cur = tabs.get(tabId);
+    return Boolean(cur && cur.bridge === bridge);
+  };
   const push = (event, data) => {
+    if (!isCurrent()) return;
     const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const res of entry.sse) {
       try {
@@ -796,10 +824,12 @@ function wireBridge(tabId, entry) {
   };
 
   bridge.on("notification", (msg) => {
+    if (!isCurrent()) return;
     recordAcpForTranscript(tabId, entry, msg);
     push("acp", msg);
   });
   bridge.on("request", (msg) => {
+    if (!isCurrent()) return;
     const method = msg.method || "request";
     void persistMessage(tabId, entry, {
       role: "permission",
@@ -808,9 +838,16 @@ function wireBridge(tabId, entry) {
     }).catch(() => {});
     push("acp-request", msg);
   });
-  bridge.on("stderr", (text) => push("stderr", { text }));
-  bridge.on("error", (err) => push("error", { message: err.message }));
+  bridge.on("stderr", (text) => {
+    if (!isCurrent()) return;
+    push("stderr", { text });
+  });
+  bridge.on("error", (err) => {
+    if (!isCurrent()) return;
+    push("error", { message: err.message });
+  });
   bridge.on("exit", (info) => {
+    if (!isCurrent()) return;
     tabs.touch(tabId);
     void flushThoughtBuffer(tabId, entry).then(() =>
       flushAgentBuffer(tabId, entry),

@@ -79,6 +79,25 @@ describe("mergeToolUpdate", () => {
     assert.deepEqual(next.rawInput, prev.rawInput);
     assert.equal(extractDiffs(next).length, 1);
   });
+
+  it("preserves content when update has sparse non-empty content[]", () => {
+    const prev = {
+      toolCallId: "t1",
+      status: "pending",
+      content: [
+        { type: "diff", path: "a.js", oldText: "a", newText: "b" },
+      ],
+    };
+    const next = mergeToolUpdate(prev, {
+      toolCallId: "t1",
+      status: "completed",
+      // Sparse stub — no old/new — must not wipe prior diff
+      content: [{ type: "diff", path: "a.js" }],
+    });
+    assert.equal(next.status, "completed");
+    assert.equal(extractDiffs(next).length, 1);
+    assert.equal(extractDiffs(next)[0].oldText, "a");
+  });
 });
 
 describe("extractDiffs edge cases", () => {

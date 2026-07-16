@@ -458,6 +458,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **5 review fixes** | mergeToolUpdate, diff_review upsert, safer diffs, truncate large diffs, transcript diff_review |
 | 2026-07-16 | **6 complete** | `lib/fs-browse` + `/api/fs/tree|file` + Files panel; path containment + symlink escape; v0.8.0 |
 | 2026-07-16 | **6 review fixes** | ~ root expand, fsBrowseHttpStatus, O_NOFOLLOW+re-realpath, omit escape symlinks, depth cap 3, UI session sync + lazy depth 0 + expand retry |
+| 2026-07-16 | **audit bugfix** | resolveGrokBin (relative mock), ensure no-overwrite, merge sparse content, bubble resetLive, hydrate history, stop/SIGKILL, wireBridge stale, busy 409, flush on tools |
 
 ---
 

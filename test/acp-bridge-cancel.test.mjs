@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import { AcpBridge } from "../lib/acp-bridge.mjs";
+import { dirname, join, isAbsolute, resolve } from "node:path";
+import { AcpBridge, resolveGrokBin } from "../lib/acp-bridge.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MOCK_BIN = join(__dirname, "..", "scripts", "mock-grok-agent.mjs");
@@ -93,5 +93,21 @@ describe("AcpBridge.cancel", () => {
     } finally {
       bridge.stop();
     }
+  });
+});
+
+describe("resolveGrokBin", () => {
+  it("resolves relative paths against process.cwd not session cwd", () => {
+    const abs = resolveGrokBin("./scripts/mock-grok-agent.mjs");
+    assert.equal(isAbsolute(abs), true);
+    assert.equal(abs, resolve(process.cwd(), "./scripts/mock-grok-agent.mjs"));
+  });
+
+  it("leaves bare PATH names alone", () => {
+    assert.equal(resolveGrokBin("grok"), "grok");
+  });
+
+  it("keeps absolute paths", () => {
+    assert.equal(resolveGrokBin("/usr/bin/grok"), "/usr/bin/grok");
   });
 });

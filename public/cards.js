@@ -264,6 +264,25 @@ export function mergeToolUpdate(prev, update) {
   ]) {
     keepIfEmpty(key);
   }
+
+  // Sparse non-empty content[] (status stubs without old/new) must not wipe diffs
+  if (Array.isArray(u.content) && u.content.length > 0 && Array.isArray(p.content) && p.content.length) {
+    const prevDiffs = extractDiffs(p);
+    const nextDiffs = extractDiffs(u);
+    if (prevDiffs.length > 0 && nextDiffs.length === 0) {
+      merged.content = p.content;
+    }
+  }
+  // Same for sparse rawInput that would drop extractable diffs
+  if (u.rawInput != null && p.rawInput != null) {
+    const prevDiffs = extractDiffs({ rawInput: p.rawInput });
+    const nextDiffs = extractDiffs({ rawInput: u.rawInput });
+    if (prevDiffs.length > 0 && nextDiffs.length === 0) {
+      merged.rawInput = p.rawInput;
+      if (merged.raw_input === u.raw_input) merged.raw_input = p.raw_input ?? p.rawInput;
+    }
+  }
+
   return merged;
 }
 

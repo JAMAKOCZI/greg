@@ -13,6 +13,8 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 └──────────────┘   events/cards  └──────────────┘   session/update   └─────────────────┘
 ```
 
+`GROK_BIN` relative paths are resolved against **Greg’s process cwd** (`resolveGrokBin`), not the session workspace — so `GROK_BIN=./scripts/mock-grok-agent.mjs` works for any project path.
+
 1. User opens a one-time bootstrap URL (`?token=…`). Greg sets an HttpOnly session cookie and redirects to `/`.
 2. UI creates a tab via `POST /api/session/new` → Greg spawns `grok agent stdio`, sends ACP `initialize` + `session/new`.
 3. UI opens `GET /api/stream?tabId=…` (SSE) for live `session/update` and permission requests.
