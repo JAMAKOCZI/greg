@@ -36,6 +36,8 @@ let historyRefreshTimer = null;
 
 /** @type {string|null} */
 let activeTabId = null;
+/** Guard double-click New session / recents. */
+let creatingSession = false;
 
 /**
  * Per-tab client state.
@@ -251,6 +253,7 @@ function renderRecents() {
       <span class="recent-sub">${escapeHtml(item.path)}</span>
     `;
     pick.addEventListener("click", () => {
+      if (creatingSession) return;
       els.cwd.value = item.path;
       void newSession();
     });
@@ -1225,6 +1228,9 @@ function renderHistoryList() {
 }
 
 async function newSession() {
+  if (creatingSession) return;
+  creatingSession = true;
+  if (els.btnNew) els.btnNew.disabled = true;
   setStatus("busy", "Starting agent…");
   setComposerEnabled(false);
   setStopEnabled(false);
@@ -1309,6 +1315,9 @@ async function newSession() {
       updateSessionLabel(null);
     }
     renderSessionList();
+  } finally {
+    creatingSession = false;
+    if (els.btnNew) els.btnNew.disabled = false;
   }
 }
 

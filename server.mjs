@@ -53,11 +53,10 @@ const server = createGregServer({
       return true;
     }
 
-    // Recent workspaces
+    // Recent workspaces (GET is read-only; missing dirs filtered in response)
     if (url.pathname === "/api/recents" && req.method === "GET") {
       try {
-        await recents.pruneMissing().catch(() => 0);
-        const list = await recents.list();
+        const list = await recents.list({ hideMissing: true });
         json(res, 200, { recents: list });
       } catch (err) {
         json(res, 500, { error: err.message || String(err) });
@@ -81,12 +80,20 @@ const server = createGregServer({
     }
 
     if (url.pathname === "/api/recents" && req.method === "DELETE") {
-      const body =
-        req.headers["content-type"]?.includes("json")
-          ? await readJson(req).catch(() => ({}))
-          : {};
-      const path =
-        body.path || url.searchParams.get("path") || "";
+      let body = {};
+      try {
+        body = await readJson(req);
+      } catch {
+        body = {};
+      }
+      const path = (body.path || url.searchParams.get("path") || "").trim();
+      if (!path) {
+        json(res, 400, {
+          error: "Missing path",
+          code: "EMPTY",
+        });
+        return true;
+      }
       try {
         const removed = await recents.remove(path);
         json(res, 200, { ok: true, removed });

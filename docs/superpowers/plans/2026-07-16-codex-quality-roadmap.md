@@ -450,6 +450,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **2 complete** | Transcript store + API + History UI replay; v0.4.0; `~/.greg/sessions` |
 | 2026-07-16 | **2 review fixes** | Await shutdown flush, buffer-safe agent write, history race guard, no DELETE while live, thoughts, tool upsert, 0o700/0o600 |
 | 2026-07-16 | **3 complete** | resolveWorkspace + recents store/API/UI; v0.5.0 |
+| 2026-07-16 | **3 review fixes** | empty DELETE no-op, non-mutating GET list, recents mutex+uuid tmp, X_OK/realpath, session create guard |
 
 ---
 

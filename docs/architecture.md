@@ -45,11 +45,12 @@ Step-by-step product plan: [superpowers/plans/2026-07-16-codex-quality-roadmap.m
 
 ## Workspace recents (v0.5)
 
-- `lib/workspace.mjs`: `resolveWorkspace` (empty / missing / not-a-dir / `~` expand)
-- `RecentsStore` → `~/.greg/recents.json` (max 20, MRU, prune missing on list)
+- `lib/workspace.mjs`: `resolveWorkspace` (empty / missing / not-a-dir / `~`+`~/` only / realpath / `R_OK|X_OK`)
+- `RecentsStore` → `~/.greg/recents.json` (max 20, MRU, write mutex, UUID temps)
+- `GET /api/recents` is read-only (missing dirs filtered in response; no rewrite)
 - `POST /api/session/new` rejects invalid cwd with `400` + `code`
-- Successful session adds cwd to recents; `GET/POST/DELETE /api/recents`
-- UI: click recent → fill path + New session
+- Successful session adds cwd to recents; `POST/DELETE /api/recents` (DELETE empty path → 400)
+- UI: click recent → fill path + New session (guard against double-create)
 
 ## Durable transcripts (v0.4)
 
