@@ -48,7 +48,8 @@ Step-by-step product plan: [superpowers/plans/2026-07-16-codex-quality-roadmap.m
 - File: `~/.greg/settings.json` (`GREG_SETTINGS_PATH` override)
 - Fields: `alwaysApprove`, `model`, `defaultCwd`, `theme`
 - `GET/PUT /api/settings`; also embedded in `/api/meta`
-- `session/new` uses settings when body omits `model` / `alwaysApprove`
+- `session/new`: if body has `model` / `alwaysApprove` keys, those win (null model = no override); if omitted, settings apply. UI always sends explicit values.
+- `defaultCwd` on PUT is validated via `resolveWorkspace` (expanded/realpath when valid)
 - Effective default workspace: settings.defaultCwd → `GREG_CWD` → process cwd
 
 ## Workspace recents (v0.5)

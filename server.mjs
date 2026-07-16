@@ -58,16 +58,20 @@ const server = createGregServer({
   sessionSecret,
   async onApi(req, res, url) {
     if (url.pathname === "/api/meta" && req.method === "GET") {
-      const settings = await settingsStore.load();
-      json(res, 200, {
-        name: "greg",
-        version: "0.6.0",
-        grokBin: GROK_BIN,
-        defaultCwd: await effectiveDefaultCwd(),
-        sessionsDir: SESSIONS_DIR,
-        platform: platform(),
-        settings,
-      });
+      try {
+        const settings = await settingsStore.load();
+        json(res, 200, {
+          name: "greg",
+          version: "0.6.0",
+          grokBin: GROK_BIN,
+          defaultCwd: await effectiveDefaultCwd(),
+          sessionsDir: SESSIONS_DIR,
+          platform: platform(),
+          settings,
+        });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
       return true;
     }
 
@@ -84,7 +88,26 @@ const server = createGregServer({
     if (url.pathname === "/api/settings" && req.method === "PUT") {
       try {
         const body = await readJson(req);
-        const settings = await settingsStore.update(body.settings || body);
+        const patch = body.settings || body;
+        // Validate defaultCwd when provided (empty clears)
+        if (Object.prototype.hasOwnProperty.call(patch, "defaultCwd")) {
+          const raw = patch.defaultCwd;
+          if (raw != null && String(raw).trim()) {
+            const resolved = await resolveWorkspace(String(raw));
+            if (!resolved.ok) {
+              json(res, 400, {
+                error: resolved.error,
+                code: resolved.code,
+                field: "defaultCwd",
+              });
+              return true;
+            }
+            patch.defaultCwd = resolved.path;
+          } else {
+            patch.defaultCwd = null;
+          }
+        }
+        const settings = await settingsStore.update(patch);
         json(res, 200, { ok: true, settings });
       } catch (err) {
         json(res, 500, { error: err.message || String(err) });
@@ -246,14 +269,18 @@ const server = createGregServer({
         tabs.delete(tabId);
       }
 
-      const model =
-        typeof body.model === "string" && body.model.trim()
-          ? body.model.trim()
-          : settings.model;
-      const alwaysApprove =
-        body.alwaysApprove !== undefined
-          ? Boolean(body.alwaysApprove)
-          : settings.alwaysApprove;
+      // Explicit body.model (including null/"") overrides settings for this session
+      let model = settings.model;
+      if (Object.prototype.hasOwnProperty.call(body, "model")) {
+        model =
+          typeof body.model === "string" && body.model.trim()
+            ? body.model.trim()
+            : null;
+      }
+      let alwaysApprove = settings.alwaysApprove;
+      if (Object.prototype.hasOwnProperty.call(body, "alwaysApprove")) {
+        alwaysApprove = body.alwaysApprove === true;
+      }
 
       const bridge = new AcpBridge({
         grokBin: GROK_BIN,

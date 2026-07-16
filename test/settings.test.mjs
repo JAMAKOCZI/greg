@@ -23,7 +23,7 @@ describe("normalizeSettings / mergeSettings", () => {
 
   it("trims model and defaultCwd", () => {
     const s = normalizeSettings({
-      alwaysApprove: 1,
+      alwaysApprove: true,
       model: "  grok-4  ",
       defaultCwd: " /tmp/p ",
       theme: " light ",
@@ -69,13 +69,20 @@ describe("SettingsStore", () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await rm(file, { force: true });
     store = new SettingsStore({ filePath: file });
   });
 
   it("load returns defaults when file missing", async () => {
     const s = await store.load();
     assert.deepEqual(s, { ...DEFAULT_SETTINGS });
+  });
+
+  it("alwaysApprove only true when strictly true", () => {
+    assert.equal(normalizeSettings({ alwaysApprove: "false" }).alwaysApprove, false);
+    assert.equal(normalizeSettings({ alwaysApprove: "true" }).alwaysApprove, false);
+    assert.equal(normalizeSettings({ alwaysApprove: true }).alwaysApprove, true);
   });
 
   it("save + load round-trip", async () => {

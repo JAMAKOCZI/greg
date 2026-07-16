@@ -222,6 +222,10 @@ let settings = {
 
 let settingsSaveTimer = null;
 let settingsLoaded = false;
+/** Monotonic save generation — ignore stale PUT responses. */
+let settingsSaveGen = 0;
+/** @type {Promise<void>|null} */
+let settingsSaveChain = null;
 
 async function loadMeta() {
   try {
@@ -246,7 +250,7 @@ async function loadMeta() {
  */
 function applySettingsToUi(s) {
   settings = {
-    alwaysApprove: Boolean(s.alwaysApprove),
+    alwaysApprove: s.alwaysApprove === true,
     model: s.model ?? null,
     defaultCwd: s.defaultCwd ?? null,
     theme: s.theme || "dark",
@@ -259,7 +263,7 @@ function applySettingsToUi(s) {
 
 function readSettingsFromUi() {
   return {
-    alwaysApprove: Boolean(els.alwaysApprove?.checked),
+    alwaysApprove: els.alwaysApprove?.checked === true,
     model: (els.model?.value || "").trim() || null,
     defaultCwd: (els.defaultCwd?.value || "").trim() || null,
     theme: settings.theme || "dark",
@@ -275,23 +279,59 @@ function scheduleSettingsSave() {
   }, 400);
 }
 
+/**
+ * Persist settings from UI. Queued so only one PUT is in flight; trailing
+ * snapshot runs after the previous finishes (avoids stale full-document race).
+ * @returns {Promise<void>}
+ */
 async function saveSettings() {
   if (!settingsLoaded) return;
-  const next = readSettingsFromUi();
-  try {
-    const data = await api("/api/settings", {
-      method: "PUT",
-      body: JSON.stringify(next),
-    });
-    if (data.settings) {
-      settings = data.settings;
-      // Keep cwd input in sync if user only set default and cwd is empty
-      if (settings.defaultCwd && !els.cwd.value.trim()) {
-        els.cwd.value = settings.defaultCwd;
+  // Chain saves so rapid edits apply the latest UI after prior PUT
+  const run = async () => {
+    const gen = ++settingsSaveGen;
+    const next = readSettingsFromUi();
+    try {
+      const data = await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify(next),
+      });
+      if (gen !== settingsSaveGen) return;
+      if (data.settings) {
+        settings = data.settings;
+        if (settings.defaultCwd && !els.cwd.value.trim()) {
+          els.cwd.value = settings.defaultCwd;
+        }
       }
+    } catch (e) {
+      if (gen !== settingsSaveGen) return;
+      console.error("[greg] settings save failed", e);
+      setStatus("error", "Settings save failed");
+      applySettingsToUi(settings);
+      // Re-apply last known good; leave hint briefly
+      setTimeout(() => {
+        const st = activeState();
+        if (st?.sending) setStatus("busy", "Running…");
+        else if (st?.alive) setStatus("ready", "Ready");
+        else if (historyViewId) setStatus("idle", "History");
+        else setStatus("idle", "Idle");
+      }, 2500);
     }
-  } catch (e) {
-    console.error("[greg] settings save failed", e);
+  };
+
+  settingsSaveChain = (settingsSaveChain || Promise.resolve())
+    .then(run)
+    .catch(() => {});
+  await settingsSaveChain;
+}
+
+/** Flush pending debounced save before starting a session. */
+async function flushSettingsSave() {
+  if (settingsSaveTimer) {
+    clearTimeout(settingsSaveTimer);
+    settingsSaveTimer = null;
+    await saveSettings();
+  } else if (settingsSaveChain) {
+    await settingsSaveChain;
   }
 }
 
@@ -1306,6 +1346,8 @@ async function newSession() {
   setComposerEnabled(false);
   setStopEnabled(false);
   closeSidebar();
+  // Ensure disk settings match UI (model clear must win over stale settings.model)
+  await flushSettingsSave();
 
   // Park current tab; do not stop it
   const prev = activeState();
@@ -1328,8 +1370,9 @@ async function newSession() {
       method: "POST",
       body: JSON.stringify({
         cwd: els.cwd.value.trim() || undefined,
-        alwaysApprove: els.alwaysApprove?.checked,
-        model: (els.model?.value || "").trim() || undefined,
+        // Always send explicit values so session matches the form (WYSIWYG)
+        alwaysApprove: els.alwaysApprove?.checked === true,
+        model: (els.model?.value || "").trim() || null,
       }),
     });
 

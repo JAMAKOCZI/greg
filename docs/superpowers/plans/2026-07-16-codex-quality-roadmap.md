@@ -452,6 +452,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **3 complete** | resolveWorkspace + recents store/API/UI; v0.5.0 |
 | 2026-07-16 | **3 review fixes** | empty DELETE no-op, non-mutating GET list, recents mutex+uuid tmp, X_OK/realpath, session create guard |
 | 2026-07-16 | **4 complete** | Settings store/API/UI; model + alwaysApprove + defaultCwd; v0.6.0 |
+| 2026-07-16 | **4 review fixes** | WYSIWYG model on session/new, validate defaultCwd, save queue + error UX, strict boolean |
 
 ---
 
