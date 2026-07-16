@@ -31,7 +31,7 @@ const server = createGregServer({
     if (url.pathname === "/api/meta" && req.method === "GET") {
       json(res, 200, {
         name: "greg",
-        version: "0.2.0",
+        version: "0.2.1",
         grokBin: GROK_BIN,
         defaultCwd: DEFAULT_CWD,
         platform: platform(),

@@ -8,7 +8,7 @@ Greg is a browser UI that runs on your machine and talks to the official `grok` 
 
 ## Status
 
-Early (`0.2.0`). Local multi-session desk, permission cards, and rich tool/diff/plan cards over ACP. Disk session history and workspace switcher still to come.
+Early (`0.2.1`). Local multi-session desk, permission cards, and rich tool/diff/plan cards over ACP. Phase 0 foundation: `npm test`, mock ACP agent. Disk session history and workspace switcher still to come.
 
 ## Requirements
 
@@ -61,8 +61,21 @@ See [docs/architecture.md](docs/architecture.md).
 
 ```sh
 npm run dev      # restart on file changes
-npm run check    # syntax check
+npm run check    # syntax check (server + lib)
+npm test         # unit + mock ACP bridge tests (node:test)
 ```
+
+### Mock agent (no Grok login)
+
+Smoke the full desk without a real `grok` binary:
+
+```sh
+GROK_BIN=./scripts/mock-grok-agent.mjs GREG_NO_OPEN=1 npm start
+```
+
+Open the printed one-time URL → **New session** → send a prompt. The mock speaks minimal ACP over stdio.
+
+Quality roadmap (phased, step-by-step): [docs/superpowers/plans/2026-07-16-codex-quality-roadmap.md](docs/superpowers/plans/2026-07-16-codex-quality-roadmap.md).
 
 Optional maintainer tooling (knowledge graph, editor hooks, etc.) is **not** part of Greg’s runtime and is never required to run or ship the app. See `AGENTS.md` if you contribute with an AI coding agent.
 
