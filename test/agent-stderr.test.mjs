@@ -41,4 +41,20 @@ describe("classifyAgentStderr", () => {
     assert.equal(classifyAgentStderr("  \n"), "silent");
     assert.equal(filterAgentStderrForUi("\u001b[0m  "), null);
   });
+
+  it("marks tool_output_error stderr as noise", () => {
+    const msg =
+      '2026-07-17T12:50:25.313893Z ERROR tool_error: tool_output_error session_id=019f7020 tool_name="read_file" effective_tool_name="read_file" model_id="grok-4.5" error_kind="tool_output_error"';
+    assert.equal(classifyAgentStderr(msg), "noise");
+    assert.equal(filterAgentStderrForUi(msg), null);
+  });
+
+  it("marks deserialize response IO noise", () => {
+    assert.equal(
+      classifyAgentStderr(
+        'IO Error: Internal error: "failed to deserialize response"',
+      ),
+      "noise",
+    );
+  });
 });

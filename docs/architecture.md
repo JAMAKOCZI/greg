@@ -122,6 +122,21 @@ Response fields on `session/new`: `contextSeeded`, `contextSeed: { messageCount,
 
 Atomic writes: temp file + rename via `lib/transcript-store.mjs`.
 
+## Session human rules (tool discipline)
+
+Every `session/new` injects `_meta.rules` from `lib/greg-session-rules.mjs` (Grok folds this into `<human_rules>` on fresh sessions). Goals:
+
+- Prefer `read_file` / list; on Windows read failures, one simple shell read — no forensics spiral
+- Do not auto-load check-work / review skills for small “check this file” tasks
+- Minimize tool noise (Greg shows every card)
+
+Disable with env `GREG_NO_SESSION_RULES=1`.
+
+## Quiet tool failures (UI)
+
+- stderr lines matching `tool_error` / `tool_output_error` / deserialize IO noise are filtered (`lib/agent-stderr.mjs`)
+- Failed tool cards show a one-line summary; full error + tool id are collapsed (`public/cards.js`)
+
 ## Message rendering (markdown)
 
 Agent and user bubbles use client-side GFM-ish markdown (`public/markdown.js`):

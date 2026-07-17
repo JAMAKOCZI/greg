@@ -61,6 +61,38 @@ export function statusLabel(status) {
 }
 
 /**
+ * One-line human summary for failed tools (hide transport/internal noise).
+ * @param {string} text
+ * @param {number} [max]
+ * @returns {string}
+ */
+export function shortFailSummary(text, max = 160) {
+  let s = String(text || "")
+    .replace(/\u001b\[[0-9;]*m/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) return "Tool failed";
+
+  // Common Grok read_file transport failure on Windows paths
+  if (/failed to deserialize response/i.test(s) || /deserialize response/i.test(s)) {
+    return "Could not read file (tool transport error — try again or use shell)";
+  }
+  if (/ENOENT|no such file/i.test(s)) return "File not found";
+  if (/permission denied|EACCES/i.test(s)) return "Permission denied";
+
+  // Strip wrappers
+  s = s.replace(/^Failed to read file:\s*/i, "");
+  s = s.replace(/IO Error:\s*Internal error:\s*/i, "");
+  s = s.replace(/^IO Error:\s*/i, "");
+  s = s.replace(/^Error:\s*/i, "");
+  // Drop surrounding quotes left from Debug formatting
+  s = s.replace(/^"+|"+$/g, "").trim();
+
+  if (s.length > max) s = `${s.slice(0, max - 1)}…`;
+  return s || "Tool failed";
+}
+
+/**
  * Detect whether a string looks like a unified diff.
  * @param {string} text
  */
@@ -621,8 +653,9 @@ export function upsertToolCard(existing, update) {
   const rawInput = u.rawInput ?? u.raw_input ?? u.input;
   const rawOutput = u.rawOutput ?? u.raw_output ?? u.output;
 
+  const failed = status === "failed";
   const card = existing || document.createElement("div");
-  card.className = `card card-tool status-${status}`;
+  card.className = `card card-tool status-${status}${failed ? " is-failed-quiet" : ""}`;
   if (toolCallId) card.dataset.toolCallId = toolCallId;
 
   // Preserve open state of details if refreshing
@@ -661,13 +694,7 @@ export function upsertToolCard(existing, update) {
 
   card.appendChild(head);
 
-  if (toolCallId) {
-    const idEl = document.createElement("div");
-    idEl.className = "card-id muted mono";
-    idEl.textContent = toolCallId;
-    card.appendChild(idEl);
-  }
-
+  // Path hint (useful on failed reads) — keep short
   if (locations.length) {
     const loc = document.createElement("div");
     loc.className = "card-locations muted mono";
@@ -682,6 +709,49 @@ export function upsertToolCard(existing, update) {
     if (loc.textContent) card.appendChild(loc);
   }
 
+  // Failed: one-line summary only; details collapsed (no wall of error text)
+  const joinedTexts = texts.length ? texts.join("\n") : "";
+  if (failed) {
+    const errBlob =
+      joinedTexts ||
+      (rawOutput != null && rawOutput !== ""
+        ? typeof rawOutput === "string"
+          ? rawOutput
+          : prettyJson(rawOutput)
+        : "") ||
+      (rawInput != null ? prettyJson(rawInput) : "");
+    const sum = document.createElement("div");
+    sum.className = "card-fail-summary";
+    sum.textContent = shortFailSummary(errBlob);
+    card.appendChild(sum);
+
+    if (errBlob && errBlob.trim() !== sum.textContent) {
+      card.appendChild(
+        detailsSection("details", errBlob, {
+          open: wasOpen.has("details"),
+          mono: true,
+        }),
+      );
+    }
+    // tool id only under details for failed cards
+    if (toolCallId) {
+      card.appendChild(
+        detailsSection("tool id", toolCallId, {
+          open: false,
+          mono: true,
+        }),
+      );
+    }
+    return card;
+  }
+
+  if (toolCallId) {
+    const idEl = document.createElement("div");
+    idEl.className = "card-id muted mono";
+    idEl.textContent = toolCallId;
+    card.appendChild(idEl);
+  }
+
   // Diffs — always visible when present (primary signal)
   if (diffs.length) {
     const diffsWrap = document.createElement("div");
@@ -692,13 +762,16 @@ export function upsertToolCard(existing, update) {
     card.appendChild(diffsWrap);
   }
 
-  // Text content
+  // Text content — long shell dumps stay collapsed
   if (texts.length) {
     const joined = texts.join("\n");
     const section = detailsSection(
       "output",
       joined,
-      { open: wasOpen.has("output") || joined.length < 400, mono: true },
+      {
+        open: wasOpen.has("output") || joined.length < 280,
+        mono: true,
+      },
     );
     card.appendChild(section);
   }
@@ -726,8 +799,10 @@ export function upsertToolCard(existing, update) {
       ].includes(k),
     );
   if (rawInput != null && rawInput !== "" && !inputIsOnlyDiff) {
-    const section = detailsSection("input", prettyJson(rawInput), {
-      open: wasOpen.has("input"),
+    const inputStr = prettyJson(rawInput);
+    const section = detailsSection("input", inputStr, {
+      // Keep long shell commands / args collapsed
+      open: wasOpen.has("input") || inputStr.length < 200,
       mono: true,
     });
     card.appendChild(section);
@@ -745,7 +820,7 @@ export function upsertToolCard(existing, update) {
     } else {
       card.appendChild(
         detailsSection("output", asStr, {
-          open: wasOpen.has("output"),
+          open: wasOpen.has("output") || asStr.length < 280,
           mono: true,
         }),
       );

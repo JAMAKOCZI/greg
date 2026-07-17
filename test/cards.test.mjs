@@ -12,6 +12,7 @@ import {
   unwrapSessionUpdate,
   sessionUpdateKind,
   mergeToolUpdate,
+  shortFailSummary,
 } from "../public/cards.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -29,6 +30,22 @@ describe("normalizeStatus", () => {
     assert.equal(normalizeStatus("failed"), "failed");
     assert.equal(normalizeStatus("cancelled"), "failed");
     assert.equal(normalizeStatus(""), "pending");
+  });
+});
+
+describe("shortFailSummary", () => {
+  it("maps deserialize transport errors to a short line", () => {
+    const s = shortFailSummary(
+      'Failed to read file: C:\\x\\strona krzesła\\index.html, IO Error: Internal error: "failed to deserialize response"',
+    );
+    assert.match(s, /Could not read file/i);
+    assert.ok(s.length < 120);
+  });
+
+  it("truncates long messages", () => {
+    const s = shortFailSummary("x".repeat(500), 40);
+    assert.ok(s.length <= 40);
+    assert.ok(s.endsWith("…"));
   });
 });
 

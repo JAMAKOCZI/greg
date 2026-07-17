@@ -49,6 +49,7 @@ Open it in your browser. The server binds to **localhost only**.
 | `GREG_RECENTS_PATH` | `~/.greg/recents.json` | Recent workspace paths (MRU) |
 | `GREG_SETTINGS_PATH` | `~/.greg/settings.json` | UI defaults (always-approve, model, default cwd) |
 | `GREG_GROK_SESSIONS_DIR` | `~/.grok/sessions` | Read-only scan root for **Import Grok** (never written) |
+| `GREG_NO_SESSION_RULES` | unset | Set to `1` to skip injecting Greg tool-discipline rules into ACP sessions |
 
 ## Architecture
 
