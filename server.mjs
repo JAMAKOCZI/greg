@@ -33,6 +33,8 @@ import {
 import {
   listTree,
   listDirectories,
+  listFilesystemRoots,
+  createDirectory,
   readWorkspaceFile,
   fsBrowseHttpStatus,
 } from "./lib/fs-browse.mjs";
@@ -269,6 +271,43 @@ const server = createGregServer({
             error: result.error,
             code: result.code,
           });
+          return true;
+        }
+        json(res, 200, result);
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    if (url.pathname === "/api/fs/roots" && req.method === "GET") {
+      try {
+        const result = await listFilesystemRoots();
+        json(res, 200, result);
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    if (url.pathname === "/api/fs/mkdir" && req.method === "POST") {
+      try {
+        const body = await readJson(req);
+        const parent =
+          (body.path || body.parent || "").trim() ||
+          (await effectiveDefaultCwd());
+        const name = (body.name || "").trim();
+        const result = await createDirectory(parent, name);
+        if (!result.ok) {
+          const status =
+            result.code === "EEXIST"
+              ? 409
+              : result.code === "EACCES"
+                ? 403
+                : result.code === "INVALID_NAME"
+                  ? 400
+                  : fsBrowseHttpStatus(result.code);
+          json(res, status, { error: result.error, code: result.code });
           return true;
         }
         json(res, 200, result);

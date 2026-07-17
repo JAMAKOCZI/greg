@@ -14,6 +14,9 @@ import {
   resolveUnderRoot,
   listTree,
   listDirectories,
+  listFilesystemRoots,
+  createDirectory,
+  pathBreadcrumbs,
   readWorkspaceFile,
   looksBinary,
   fsBrowseHttpStatus,
@@ -255,12 +258,46 @@ describe("resolveUnderRoot / listTree / readWorkspaceFile", () => {
     assert.ok(!r.entries.some((e) => e.name === "README.md"));
     assert.ok(!r.entries.some((e) => e.name === "node_modules"));
     assert.ok(r.parent);
+    assert.ok(Array.isArray(r.breadcrumbs));
+    assert.ok(r.breadcrumbs.some((c) => c.path === root));
   });
 
-  it("listDirectories rejects filesystem root", async () => {
+  it("listDirectories allows browsing filesystem root", async () => {
     const r = await listDirectories("/");
-    assert.equal(r.ok, false);
-    assert.equal(r.code, "ROOT_FORBIDDEN");
+    assert.equal(r.ok, true);
+    assert.equal(r.path, "/");
+    assert.equal(r.parent, null);
+    assert.ok(r.entries.some((e) => e.name === "home" || e.name === "tmp"));
+  });
+
+  it("pathBreadcrumbs splits unix and windows paths", () => {
+    const u = pathBreadcrumbs("/home/wiktor/strona");
+    assert.deepEqual(
+      u.map((c) => c.label),
+      ["/", "home", "wiktor", "strona"],
+    );
+    assert.equal(u[2].path, "/home/wiktor");
+    const w = pathBreadcrumbs("C:\\Users\\wiktor\\strona");
+    assert.equal(w[0].label, "C:");
+    assert.equal(w[2].label, "wiktor");
+    assert.ok(w[2].path.includes("wiktor"));
+  });
+
+  it("createDirectory makes a subfolder", async () => {
+    const r = await createDirectory(root, "new-proj");
+    assert.equal(r.ok, true);
+    assert.ok(r.path.endsWith("new-proj"));
+    const list = await listDirectories(root);
+    assert.ok(list.entries.some((e) => e.name === "new-proj"));
+    const bad = await createDirectory(root, "../escape");
+    assert.equal(bad.ok, false);
+    assert.equal(bad.code, "INVALID_NAME");
+  });
+
+  it("listFilesystemRoots includes home", async () => {
+    const r = await listFilesystemRoots();
+    assert.equal(r.ok, true);
+    assert.ok(r.roots.some((x) => x.id === "home"));
   });
 
   it("rejects readWorkspaceFile on file symlink to outside", async () => {

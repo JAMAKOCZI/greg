@@ -15,7 +15,9 @@ const els = {
   folderPickerClose: $("folder-picker-close"),
   folderPickerUp: $("folder-picker-up"),
   folderPickerHome: $("folder-picker-home"),
-  folderPickerPath: $("folder-picker-path"),
+  folderPickerNew: $("folder-picker-new"),
+  folderPickerDrive: $("folder-picker-drive"),
+  folderPickerCrumbs: $("folder-picker-crumbs"),
   folderPickerList: $("folder-picker-list"),
   folderPickerStatus: $("folder-picker-status"),
   folderPickerCancel: $("folder-picker-cancel"),
@@ -147,11 +149,24 @@ let pickerPath = "";
 let pickerParent = null;
 /** @type {string} */
 let pickerHome = "";
+/** @type {{ id: string, path: string, label: string }[]} */
+let pickerRoots = [];
 /** @type {number} */
 let pickerLoadGen = 0;
+/** @type {boolean} */
+let pickerRootsLoaded = false;
 
 function isFolderPickerOpen() {
   return Boolean(els.folderPicker && !els.folderPicker.hidden);
+}
+
+/** Reject filesystem root as a workspace (too broad). */
+function isSelectableWorkspacePath(p) {
+  const s = String(p || "").trim();
+  if (!s) return false;
+  if (s === "/" || s === "\\") return false;
+  // Bare drive root e.g. C:\ is OK as workspace on Windows; user may want it
+  return true;
 }
 
 function openFolderPicker(startPath) {
@@ -159,8 +174,7 @@ function openFolderPicker(startPath) {
   els.folderPicker.hidden = false;
   const start =
     (startPath || els.cwd?.value || settings.defaultCwd || "").trim() || "";
-  void loadFolderPicker(start || undefined);
-  // Focus select for keyboard users
+  void ensurePickerRoots().then(() => loadFolderPicker(start || undefined));
   queueMicrotask(() => {
     els.folderPickerSelect?.focus();
   });
@@ -173,6 +187,118 @@ function closeFolderPicker() {
     els.folderPickerStatus.textContent = "";
     els.folderPickerStatus.classList.remove("is-error");
   }
+}
+
+async function ensurePickerRoots() {
+  if (pickerRootsLoaded) return;
+  try {
+    const data = await api("/api/fs/roots");
+    pickerRoots = data.roots || [];
+    pickerHome = data.home || pickerHome;
+    pickerRootsLoaded = true;
+    populateDriveSelect();
+  } catch {
+    pickerRoots = [];
+    pickerRootsLoaded = true;
+    populateDriveSelect();
+  }
+}
+
+function populateDriveSelect() {
+  if (!els.folderPickerDrive) return;
+  const prev = els.folderPickerDrive.value;
+  els.folderPickerDrive.innerHTML = "";
+  const ph = document.createElement("option");
+  ph.value = "";
+  ph.textContent = "Drive / root…";
+  els.folderPickerDrive.appendChild(ph);
+  for (const r of pickerRoots) {
+    const opt = document.createElement("option");
+    opt.value = r.path;
+    opt.textContent = r.label || r.path;
+    els.folderPickerDrive.appendChild(opt);
+  }
+  // Restore selection if still present
+  if (prev && [...els.folderPickerDrive.options].some((o) => o.value === prev)) {
+    els.folderPickerDrive.value = prev;
+  }
+}
+
+/**
+ * @param {{ label: string, path: string }[]} crumbs
+ * @param {string} currentPath
+ */
+function renderFolderCrumbs(crumbs, currentPath) {
+  if (!els.folderPickerCrumbs) return;
+  els.folderPickerCrumbs.innerHTML = "";
+  const list = Array.isArray(crumbs) ? crumbs : [];
+  if (!list.length) {
+    const span = document.createElement("span");
+    span.className = "folder-crumb-current";
+    span.textContent = currentPath || "";
+    els.folderPickerCrumbs.appendChild(span);
+    return;
+  }
+  list.forEach((c, i) => {
+    if (i > 0) {
+      const sep = document.createElement("span");
+      sep.className = "folder-crumb-sep";
+      sep.textContent = "/";
+      sep.setAttribute("aria-hidden", "true");
+      els.folderPickerCrumbs.appendChild(sep);
+    }
+    const isLast = i === list.length - 1;
+    if (isLast) {
+      const cur = document.createElement("span");
+      cur.className = "folder-crumb-current";
+      cur.textContent = c.label;
+      cur.title = c.path;
+      els.folderPickerCrumbs.appendChild(cur);
+    } else {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "folder-crumb";
+      btn.textContent = c.label;
+      btn.title = c.path;
+      btn.addEventListener("click", () => {
+        void loadFolderPicker(c.path);
+      });
+      els.folderPickerCrumbs.appendChild(btn);
+    }
+  });
+}
+
+/**
+ * Sync drive dropdown to current path (best-effort match).
+ * @param {string} absPath
+ */
+function syncDriveSelect(absPath) {
+  if (!els.folderPickerDrive || !pickerRoots.length) return;
+  const p = String(absPath || "");
+  // Prefer longest matching root path
+  let best = "";
+  let bestLen = -1;
+  for (const r of pickerRoots) {
+    const rp = r.path;
+    if (!rp) continue;
+    if (p === rp || p.startsWith(rp.endsWith("/") || rp.endsWith("\\") ? rp : rp + "/") ||
+        p.startsWith(rp.endsWith("\\") ? rp : rp + "\\") ||
+        (rp === "/" && p.startsWith("/"))) {
+      const len = rp.length;
+      if (len > bestLen) {
+        best = rp;
+        bestLen = len;
+      }
+    }
+  }
+  // Home special-case
+  if (pickerHome && (p === pickerHome || p.startsWith(pickerHome + "/"))) {
+    const homeRoot = pickerRoots.find((r) => r.id === "home");
+    if (homeRoot && homeRoot.path.length >= bestLen) {
+      best = homeRoot.path;
+    }
+  }
+  if (best) els.folderPickerDrive.value = best;
 }
 
 /**
@@ -189,6 +315,7 @@ async function loadFolderPicker(path) {
   }
   if (els.folderPickerUp) els.folderPickerUp.disabled = true;
   if (els.folderPickerSelect) els.folderPickerSelect.disabled = true;
+  if (els.folderPickerNew) els.folderPickerNew.disabled = true;
 
   try {
     const q = new URLSearchParams();
@@ -197,21 +324,28 @@ async function loadFolderPicker(path) {
     if (gen !== pickerLoadGen) return;
 
     pickerPath = data.path || "";
-    pickerParent = data.parent || null;
-    pickerHome = data.home || "";
+    pickerParent = data.parent ?? null;
+    pickerHome = data.home || pickerHome;
 
-    if (els.folderPickerPath) {
-      els.folderPickerPath.textContent = pickerPath;
-      els.folderPickerPath.title = pickerPath;
+    renderFolderCrumbs(data.breadcrumbs || [], pickerPath);
+    syncDriveSelect(pickerPath);
+
+    if (els.folderPickerUp) {
+      // At / we can still jump via drive select; Up disabled only when no parent
+      els.folderPickerUp.disabled = !pickerParent;
     }
-    if (els.folderPickerUp) els.folderPickerUp.disabled = !pickerParent;
-    if (els.folderPickerSelect) els.folderPickerSelect.disabled = !pickerPath;
+    const selectable = isSelectableWorkspacePath(pickerPath);
+    if (els.folderPickerSelect) els.folderPickerSelect.disabled = !selectable;
+    if (els.folderPickerNew) {
+      // Allow new folder even under / (rare)
+      els.folderPickerNew.disabled = !pickerPath;
+    }
 
     els.folderPickerList.innerHTML = "";
     const entries = data.entries || [];
     if (!entries.length) {
       els.folderPickerList.innerHTML =
-        '<div class="folder-picker-empty muted">No subfolders here — use “Use this folder” to select it.</div>';
+        '<div class="folder-picker-empty muted">No subfolders — create one or use “Use this folder”.</div>';
     } else {
       for (const ent of entries) {
         const btn = document.createElement("button");
@@ -228,31 +362,69 @@ async function loadFolderPicker(path) {
         btn.addEventListener("click", () => {
           void loadFolderPicker(ent.path);
         });
-        btn.addEventListener("dblclick", (e) => {
-          e.preventDefault();
-          void loadFolderPicker(ent.path);
-        });
         els.folderPickerList.appendChild(btn);
       }
     }
     if (data.truncated && els.folderPickerStatus) {
       els.folderPickerStatus.textContent = "Listing truncated (too many folders).";
     }
+    if (!selectable && els.folderPickerStatus && !els.folderPickerStatus.textContent) {
+      els.folderPickerStatus.textContent =
+        "Open a project folder (cannot use filesystem root as workspace).";
+    }
   } catch (e) {
     if (gen !== pickerLoadGen) return;
     els.folderPickerList.innerHTML = "";
+    if (els.folderPickerCrumbs) els.folderPickerCrumbs.innerHTML = "";
     if (els.folderPickerStatus) {
       els.folderPickerStatus.textContent = e.message || "Failed to list folder";
       els.folderPickerStatus.classList.add("is-error");
     }
     if (els.folderPickerSelect) els.folderPickerSelect.disabled = true;
+    if (els.folderPickerNew) els.folderPickerNew.disabled = true;
   }
 }
 
 function confirmFolderPicker() {
-  if (!pickerPath) return;
+  if (!isSelectableWorkspacePath(pickerPath)) return;
   setWorkspacePath(pickerPath, { openFiles: true });
   closeFolderPicker();
+}
+
+async function createFolderInPicker() {
+  if (!pickerPath) return;
+  const name = window.prompt("New folder name:");
+  if (name == null) return;
+  const trimmed = String(name).trim();
+  if (!trimmed) return;
+  if (els.folderPickerStatus) {
+    els.folderPickerStatus.textContent = "Creating…";
+    els.folderPickerStatus.classList.remove("is-error");
+  }
+  try {
+    const data = await api("/api/fs/mkdir", {
+      method: "POST",
+      body: JSON.stringify({ path: pickerPath, name: trimmed }),
+    });
+    // Enter the new folder so the user can confirm it as workspace
+    await loadFolderPicker(data.path || joinPath(pickerPath, trimmed));
+    if (els.folderPickerStatus) {
+      els.folderPickerStatus.textContent = `Created “${trimmed}”`;
+    }
+  } catch (e) {
+    if (els.folderPickerStatus) {
+      els.folderPickerStatus.textContent = e.message || "Failed to create folder";
+      els.folderPickerStatus.classList.add("is-error");
+    }
+  }
+}
+
+/** Simple path join for fallback after mkdir (POSIX-first; server returns abs path). */
+function joinPath(parent, name) {
+  const p = String(parent || "");
+  if (p.endsWith("/") || p.endsWith("\\")) return p + name;
+  if (/^[A-Za-z]:\\/.test(p)) return p + "\\" + name;
+  return p + "/" + name;
 }
 
 function displayTitle(st) {
@@ -2479,6 +2651,17 @@ if (els.folderPickerUp) {
 if (els.folderPickerHome) {
   els.folderPickerHome.addEventListener("click", () => {
     void loadFolderPicker(pickerHome || "~");
+  });
+}
+if (els.folderPickerNew) {
+  els.folderPickerNew.addEventListener("click", () => {
+    void createFolderInPicker();
+  });
+}
+if (els.folderPickerDrive) {
+  els.folderPickerDrive.addEventListener("change", () => {
+    const v = els.folderPickerDrive.value;
+    if (v) void loadFolderPicker(v);
   });
 }
 

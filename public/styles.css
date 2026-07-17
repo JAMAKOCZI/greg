@@ -234,10 +234,10 @@ body {
 .folder-picker-panel {
   position: relative;
   z-index: 1;
-  width: min(520px, 100%);
-  max-height: min(72vh, 640px);
+  width: min(560px, 100%);
+  max-height: min(78vh, 680px);
   display: grid;
-  grid-template-rows: auto auto 1fr auto auto;
+  grid-template-rows: auto auto auto 1fr auto auto;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -263,21 +263,90 @@ body {
 .folder-picker-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.12);
 }
 
-.folder-picker-path {
-  flex: 1;
+.folder-picker-drive-label {
+  margin-left: auto;
   min-width: 0;
+}
+
+.folder-picker-drive {
+  max-width: 160px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.folder-picker-drive:focus {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.folder-picker-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.4;
+  max-height: 4.5em;
+  overflow: auto;
+}
+
+.folder-crumb {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-family: var(--mono);
+  font-size: inherit;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  max-width: 12em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--mono);
-  font-size: 11.5px;
+}
+
+.folder-crumb:hover {
+  background: var(--accent-soft);
+  text-decoration: underline;
+}
+
+.folder-crumb:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.folder-crumb-sep {
   color: var(--muted);
+  padding: 0 1px;
+  user-select: none;
+}
+
+.folder-crumb-current {
+  color: var(--text);
+  font-weight: 600;
+  padding: 2px 4px;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .folder-picker-list {
