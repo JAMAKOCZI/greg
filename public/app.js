@@ -512,25 +512,59 @@ function messageHost(st) {
   return st.park;
 }
 
+/**
+ * Collapsed-by-default thinking bubble (<details>).
+ * @param {string} [text]
+ * @param {{ open?: boolean }} [opts]
+ * @returns {HTMLDetailsElement}
+ */
+function createThoughtBubble(text = "", opts = {}) {
+  const det = document.createElement("details");
+  det.className = "bubble thought";
+  det.open = opts.open === true;
+  const sum = document.createElement("summary");
+  sum.className = "thought-summary";
+  const role = document.createElement("span");
+  role.className = "role";
+  role.textContent = "thinking";
+  sum.appendChild(role);
+  const hint = document.createElement("span");
+  hint.className = "thought-hint muted";
+  hint.textContent = "hidden";
+  sum.appendChild(hint);
+  det.appendChild(sum);
+  const body = document.createElement("div");
+  body.className = "thought-body";
+  if (text) body.textContent = text;
+  det.appendChild(body);
+  return det;
+}
+
 function appendBubble(st, kind, text, { role } = {}) {
   const host = messageHost(st);
-  const div = document.createElement("div");
-  div.className = `bubble ${kind}`;
-  if (role) {
-    const r = document.createElement("span");
-    r.className = "role";
-    r.textContent = role;
-    div.appendChild(r);
-  }
-  // Agent (+ user) get structured markdown body; system/tool stay plain
-  if (kind === "agent" || kind === "user") {
-    const body = document.createElement("div");
-    body.className = "md-body";
-    div.appendChild(body);
-    div._rawText = text || "";
-    if (text) setMarkdownBody(body, text, { streaming: false });
-  } else if (text) {
-    div.appendChild(document.createTextNode(text));
+  /** @type {HTMLElement} */
+  let div;
+  if (kind === "thought") {
+    div = createThoughtBubble(text || "", { open: false });
+  } else {
+    div = document.createElement("div");
+    div.className = `bubble ${kind}`;
+    if (role) {
+      const r = document.createElement("span");
+      r.className = "role";
+      r.textContent = role;
+      div.appendChild(r);
+    }
+    // Agent (+ user) get structured markdown body; system/tool stay plain
+    if (kind === "agent" || kind === "user") {
+      const body = document.createElement("div");
+      body.className = "md-body";
+      div.appendChild(body);
+      div._rawText = text || "";
+      if (text) setMarkdownBody(body, text, { streaming: false });
+    } else if (text) {
+      div.appendChild(document.createTextNode(text));
+    }
   }
   host.appendChild(div);
   if (st.tabId === activeTabId) {
@@ -590,8 +624,11 @@ function appendToLive(st, kind, chunk) {
     if (!st.liveThoughtBubble || !st.liveThoughtBubble.parentNode) {
       st.liveThoughtBubble = appendBubble(st, "thought", "", { role: "thinking" });
     }
-    // Thoughts stay plain text (noisy markdown breaks "thinking" chrome)
-    st.liveThoughtBubble.appendChild(document.createTextNode(chunk));
+    // Stay collapsed by default; user can expand. Brief open while streaming
+    // only if they already opened it — never auto-spam thinking text.
+    const body =
+      st.liveThoughtBubble.querySelector(".thought-body") || st.liveThoughtBubble;
+    body.appendChild(document.createTextNode(chunk));
   } else {
     if (!st.liveAgentBubble || !st.liveAgentBubble.parentNode) {
       st.liveAgentBubble = appendBubble(st, "agent", "", { role: "greg" });
@@ -605,6 +642,10 @@ function resetLive(st) {
   if (!st) return;
   // Finish any in-flight markdown so tool cards appear after final content
   finalizeMarkdownBubble(st.liveAgentBubble);
+  // Keep thinking collapsed after the thought turn ends
+  if (st.liveThoughtBubble && "open" in st.liveThoughtBubble) {
+    st.liveThoughtBubble.open = false;
+  }
   st.liveAgentBubble = null;
   st.liveThoughtBubble = null;
 }
@@ -2224,14 +2265,7 @@ function renderHistoryMessage(m, host = els.transcript) {
     return;
   }
   if (role === "thought") {
-    const div = document.createElement("div");
-    div.className = "bubble thought";
-    const r = document.createElement("span");
-    r.className = "role";
-    r.textContent = "thinking";
-    div.appendChild(r);
-    div.appendChild(document.createTextNode(text));
-    append(div);
+    append(createThoughtBubble(text, { open: false }));
     return;
   }
   if (role === "tool" || role === "plan") {

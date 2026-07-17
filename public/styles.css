@@ -1648,6 +1648,56 @@ body.files-open .main-body {
   color: var(--muted);
   font-size: 12.5px;
   font-style: italic;
+  padding: 8px 12px;
+  max-width: min(520px, 100%);
+  white-space: normal;
+}
+
+.bubble.thought > summary.thought-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.bubble.thought > summary.thought-summary::-webkit-details-marker {
+  display: none;
+}
+
+.bubble.thought > summary.thought-summary::before {
+  content: "▸";
+  font-size: 10px;
+  opacity: 0.7;
+  font-style: normal;
+}
+
+.bubble.thought[open] > summary.thought-summary::before {
+  content: "▾";
+}
+
+.bubble.thought .thought-summary .role {
+  display: inline;
+  margin: 0;
+}
+
+.thought-hint {
+  font-size: 11px;
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.thought-body {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0.9;
 }
 
 .bubble .role {
@@ -2258,10 +2308,14 @@ body.files-open .main-body {
   border-color: rgba(248, 113, 113, 0.28);
 }
 
+/* Quiet completed/failed tools: compact chrome */
+.card-tool.is-quiet {
+  padding: 10px 12px;
+}
+
 /* Quiet failed tools: one-line summary, no wall of error text */
 .card-tool.is-failed-quiet {
   opacity: 0.92;
-  padding: 10px 12px;
 }
 
 .card-fail-summary {

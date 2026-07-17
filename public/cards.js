@@ -654,8 +654,11 @@ export function upsertToolCard(existing, update) {
   const rawOutput = u.rawOutput ?? u.raw_output ?? u.output;
 
   const failed = status === "failed";
+  const completed = status === "completed";
+  // Completed/failed: keep body collapsed unless the user already opened a section
+  const quietDone = failed || completed;
   const card = existing || document.createElement("div");
-  card.className = `card card-tool status-${status}${failed ? " is-failed-quiet" : ""}`;
+  card.className = `card card-tool status-${status}${quietDone ? " is-quiet" : ""}${failed ? " is-failed-quiet" : ""}`;
   if (toolCallId) card.dataset.toolCallId = toolCallId;
 
   // Preserve open state of details if refreshing
@@ -745,31 +748,57 @@ export function upsertToolCard(existing, update) {
     return card;
   }
 
+  // tool id: hide under details when done; show compact while running
   if (toolCallId) {
-    const idEl = document.createElement("div");
-    idEl.className = "card-id muted mono";
-    idEl.textContent = toolCallId;
-    card.appendChild(idEl);
+    if (quietDone) {
+      card.appendChild(
+        detailsSection("tool id", toolCallId, {
+          open: wasOpen.has("tool id"),
+          mono: true,
+        }),
+      );
+    } else {
+      const idEl = document.createElement("div");
+      idEl.className = "card-id muted mono";
+      idEl.textContent = toolCallId;
+      card.appendChild(idEl);
+    }
   }
 
-  // Diffs — always visible when present (primary signal)
+  // Diffs — collapsed when completed; open while running so live edits are visible
   if (diffs.length) {
     const diffsWrap = document.createElement("div");
     diffsWrap.className = "card-diffs";
     for (const d of diffs) {
       diffsWrap.appendChild(buildDiffBlock(d));
     }
-    card.appendChild(diffsWrap);
+    if (quietDone) {
+      const det = document.createElement("details");
+      det.className = "card-section";
+      if (wasOpen.has("diff")) det.open = true;
+      const sum = document.createElement("summary");
+      sum.textContent = diffs.length === 1 ? "diff" : `diffs (${diffs.length})`;
+      det.appendChild(sum);
+      const body = document.createElement("div");
+      body.className = "card-section-body";
+      body.appendChild(diffsWrap);
+      det.appendChild(body);
+      card.appendChild(det);
+    } else {
+      card.appendChild(diffsWrap);
+    }
   }
 
-  // Text content — long shell dumps stay collapsed
+  // Text content — completed: always collapsed; running: open only if short
   if (texts.length) {
     const joined = texts.join("\n");
     const section = detailsSection(
       "output",
       joined,
       {
-        open: wasOpen.has("output") || joined.length < 280,
+        open:
+          wasOpen.has("output") ||
+          (!quietDone && joined.length < 280),
         mono: true,
       },
     );
@@ -801,8 +830,9 @@ export function upsertToolCard(existing, update) {
   if (rawInput != null && rawInput !== "" && !inputIsOnlyDiff) {
     const inputStr = prettyJson(rawInput);
     const section = detailsSection("input", inputStr, {
-      // Keep long shell commands / args collapsed
-      open: wasOpen.has("input") || inputStr.length < 200,
+      open:
+        wasOpen.has("input") ||
+        (!quietDone && inputStr.length < 200),
       mono: true,
     });
     card.appendChild(section);
@@ -816,11 +846,27 @@ export function upsertToolCard(existing, update) {
         path: guessPathFromUnified(asStr) || "output",
         unified: asStr,
       });
-      card.appendChild(block);
+      if (quietDone) {
+        const det = document.createElement("details");
+        det.className = "card-section";
+        if (wasOpen.has("diff")) det.open = true;
+        const sum = document.createElement("summary");
+        sum.textContent = "diff";
+        det.appendChild(sum);
+        const body = document.createElement("div");
+        body.className = "card-section-body";
+        body.appendChild(block);
+        det.appendChild(body);
+        card.appendChild(det);
+      } else {
+        card.appendChild(block);
+      }
     } else {
       card.appendChild(
         detailsSection("output", asStr, {
-          open: wasOpen.has("output") || asStr.length < 280,
+          open:
+            wasOpen.has("output") ||
+            (!quietDone && asStr.length < 280),
           mono: true,
         }),
       );
