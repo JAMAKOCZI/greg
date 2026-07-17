@@ -2284,12 +2284,49 @@ async function openHistory(id) {
 }
 
 /**
+ * Rebuild a live-style tool card from a durable history row.
+ * @param {{ text?: string, meta?: Record<string, unknown> }} m
+ * @returns {HTMLElement}
+ */
+function historyToolCard(m) {
+  const meta =
+    m.meta && typeof m.meta === "object"
+      ? /** @type {Record<string, unknown>} */ (m.meta)
+      : {};
+  const text = String(m.text || "");
+  // Legacy rows only stored "title · status" in text
+  let title = meta.title ? String(meta.title) : "";
+  let status = meta.status ? String(meta.status) : "";
+  if (!title || !status) {
+    const parts = text.split(" · ");
+    if (!title && parts[0]) title = parts[0];
+    if (!status && parts.length > 1) status = parts.slice(1).join(" · ");
+  }
+  const update = {
+    sessionUpdate: "tool_call",
+    toolCallId: meta.toolCallId || meta.tool_call_id || undefined,
+    title: title || "tool",
+    status: status || "completed",
+    kind: meta.kind || undefined,
+    locations: meta.locations,
+    rawInput: meta.rawInput ?? meta.raw_input,
+    rawOutput: meta.rawOutput ?? meta.raw_output,
+    content: meta.content,
+  };
+  return upsertToolCard(null, update);
+}
+
+/**
  * @param {{ role: string, text: string, ts?: number, meta?: object }} m
  * @param {HTMLElement|DocumentFragment} [host] defaults to live transcript
  */
 function renderHistoryMessage(m, host = els.transcript) {
   const role = m.role || "system";
   const text = m.text || "";
+  const meta =
+    m.meta && typeof m.meta === "object"
+      ? /** @type {Record<string, unknown>} */ (m.meta)
+      : {};
   const append = (div) => {
     host.appendChild(div);
   };
@@ -2327,15 +2364,30 @@ function renderHistoryMessage(m, host = els.transcript) {
     append(createThoughtBubble(text, { open: false }));
     return;
   }
-  if (role === "tool" || role === "plan") {
-    const div = document.createElement("div");
-    div.className = "bubble tool";
-    const r = document.createElement("span");
-    r.className = "role";
-    r.textContent = role;
-    div.appendChild(r);
-    div.appendChild(document.createTextNode(text));
-    append(div);
+  if (role === "tool") {
+    append(historyToolCard(m));
+    return;
+  }
+  if (role === "plan") {
+    const entries = Array.isArray(meta.entries)
+      ? meta.entries
+      : Array.isArray(meta.plan)
+        ? meta.plan
+        : null;
+    if (entries) {
+      append(upsertPlanCard(null, { entries }));
+    } else {
+      // Legacy plan rows: plain bullet text
+      append(
+        upsertPlanCard(null, {
+          entries: text
+            .split("\n")
+            .map((line) => line.replace(/^[•\-*]\s*/, "").trim())
+            .filter(Boolean)
+            .map((content) => ({ content, status: "completed" })),
+        }),
+      );
+    }
     return;
   }
   if (role === "permission") {

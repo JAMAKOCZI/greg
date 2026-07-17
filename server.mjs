@@ -22,6 +22,11 @@ import {
   defaultSessionsDir,
 } from "./lib/transcript-store.mjs";
 import {
+  buildToolMetaFromUpdate,
+  collapseTranscriptMessages,
+  toolSummaryText,
+} from "./lib/transcript-messages.mjs";
+import {
   resolveWorkspace,
   RecentsStore,
   defaultRecentsPath,
@@ -445,7 +450,11 @@ const server = createGregServer({
               json(res, 404, { error: "Unknown history session" });
               return true;
             }
-            json(res, 200, doc);
+            // Collapse agent rows duplicated by concurrent flush races (legacy + safety)
+            json(res, 200, {
+              ...doc,
+              messages: collapseTranscriptMessages(doc.messages || []),
+            });
           } catch (err) {
             json(res, 400, { error: err.message || String(err) });
           }
@@ -580,7 +589,9 @@ const server = createGregServer({
         if (resume || existing) {
           try {
             const doc = await transcripts.load(tabId);
-            const built = buildResumeContextSeed(doc?.messages || []);
+            const built = buildResumeContextSeed(
+              collapseTranscriptMessages(doc?.messages || []),
+            );
             if (built?.text) {
               entry.contextSeed = built.text;
               contextSeedMeta = {
@@ -910,12 +921,14 @@ async function flushAgentBuffer(tabId, entry) {
     entry.agentBuffer = "";
     return;
   }
+  // Clear *before* await so concurrent tool flushes cannot re-persist the same text
+  entry.agentBuffer = "";
   try {
     await persistMessage(tabId, entry, { role: "agent", text: raw });
-    entry.agentBuffer = "";
   } catch (err) {
     console.error("[greg] transcript agent flush failed", err);
-    // keep buffer for retry on stop/shutdown
+    // Re-queue unsent text in front of anything that arrived mid-write
+    entry.agentBuffer = raw + (entry.agentBuffer || "");
   }
 }
 
@@ -929,15 +942,16 @@ async function flushThoughtBuffer(tabId, entry) {
     entry.thoughtBuffer = "";
     return;
   }
+  entry.thoughtBuffer = "";
   try {
     await persistMessage(tabId, entry, {
       role: "thought",
       text: raw,
       meta: { kind: "thought" },
     });
-    entry.thoughtBuffer = "";
   } catch (err) {
     console.error("[greg] transcript thought flush failed", err);
+    entry.thoughtBuffer = raw + (entry.thoughtBuffer || "");
   }
 }
 
@@ -981,20 +995,10 @@ function recordAcpForTranscript(tabId, entry, msg) {
     void flushThoughtBuffer(tabId, entry).then(() =>
       flushAgentBuffer(tabId, entry),
     );
-    const title =
-      update.title || update.toolCallId || update.toolName || update.kind || "tool";
-    const status = update.status || "";
-    const text = `${title}${status ? ` · ${status}` : ""}`;
-    const toolCallId = update.toolCallId || update.tool_call_id || null;
+    const text = toolSummaryText(update);
+    const meta = buildToolMetaFromUpdate(update);
     void transcripts
-      .upsertToolMessage(tabId, {
-        text,
-        meta: {
-          toolCallId,
-          status: status || null,
-          kind: update.kind || null,
-        },
-      })
+      .upsertToolMessage(tabId, { text, meta })
       .then(async (doc) => {
         if (!doc) {
           await ensureTranscript(tabId, {
@@ -1002,14 +1006,7 @@ function recordAcpForTranscript(tabId, entry, msg) {
             title: entry.title,
             createdAt: entry.createdAt,
           });
-          await transcripts.upsertToolMessage(tabId, {
-            text,
-            meta: {
-              toolCallId,
-              status: status || null,
-              kind: update.kind || null,
-            },
-          });
+          await transcripts.upsertToolMessage(tabId, { text, meta });
         }
       })
       .catch(() => {});
@@ -1027,7 +1024,9 @@ function recordAcpForTranscript(tabId, entry, msg) {
           .join("\n")
       : JSON.stringify(entries);
     void transcripts
-      .upsertPlanMessage(tabId, text || "(plan)")
+      .upsertPlanMessage(tabId, text || "(plan)", {
+        meta: Array.isArray(entries) ? { entries } : undefined,
+      })
       .then(async (doc) => {
         if (!doc) {
           await ensureTranscript(tabId, {
@@ -1035,7 +1034,9 @@ function recordAcpForTranscript(tabId, entry, msg) {
             title: entry.title,
             createdAt: entry.createdAt,
           });
-          await transcripts.upsertPlanMessage(tabId, text || "(plan)");
+          await transcripts.upsertPlanMessage(tabId, text || "(plan)", {
+            meta: Array.isArray(entries) ? { entries } : undefined,
+          });
         }
       })
       .catch(() => {});
@@ -1054,11 +1055,21 @@ function recordAcpForTranscript(tabId, entry, msg) {
       paths.length > 0
         ? `Diff review · ${paths.join(", ")}`
         : "Diff review";
+    const meta = buildToolMetaFromUpdate({
+      ...update,
+      kind: "diff_review",
+      title: update.title || "Diff review",
+      status: update.status || "completed",
+      toolCallId:
+        update.toolCallId ||
+        update.tool_call_id ||
+        update.id ||
+        `diff_review:${paths[0] || "anon"}`,
+      content,
+    });
+    if (paths.length) meta.paths = paths;
     void transcripts
-      .upsertToolMessage(tabId, {
-        text,
-        meta: { kind: "diff_review", paths },
-      })
+      .upsertToolMessage(tabId, { text, meta })
       .then(async (doc) => {
         if (!doc) {
           await ensureTranscript(tabId, {
@@ -1066,10 +1077,7 @@ function recordAcpForTranscript(tabId, entry, msg) {
             title: entry.title,
             createdAt: entry.createdAt,
           });
-          await transcripts.upsertToolMessage(tabId, {
-            text,
-            meta: { kind: "diff_review", paths },
-          });
+          await transcripts.upsertToolMessage(tabId, { text, meta });
         }
       })
       .catch(() => {});

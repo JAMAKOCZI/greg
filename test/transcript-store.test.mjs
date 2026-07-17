@@ -95,15 +95,26 @@ describe("TranscriptStore", () => {
     await store.create({ id: "tools", cwd: "/t" });
     await store.upsertToolMessage("tools", {
       text: "read · running",
-      meta: { toolCallId: "t1", status: "running" },
+      meta: {
+        toolCallId: "t1",
+        status: "running",
+        content: [{ type: "text", text: "body" }],
+        rawInput: { path: "a.txt" },
+      },
     });
     await store.upsertToolMessage("tools", {
       text: "read · completed",
-      meta: { toolCallId: "t1", status: "completed" },
+      meta: { toolCallId: "t1", status: "completed", content: [] },
     });
     const doc = await store.load("tools");
     assert.equal(doc.messages.filter((m) => m.role === "tool").length, 1);
     assert.equal(doc.messages[0].text, "read · completed");
+    assert.equal(doc.messages[0].meta.status, "completed");
+    // Sparse completed update must not wipe earlier content/rawInput
+    assert.deepEqual(doc.messages[0].meta.content, [
+      { type: "text", text: "body" },
+    ]);
+    assert.deepEqual(doc.messages[0].meta.rawInput, { path: "a.txt" });
   });
 
   it("rejects path-traversal ids", async () => {
