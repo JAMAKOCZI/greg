@@ -4,6 +4,11 @@
 
 Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok Build is the agent harness.
 
+## Visual direction
+
+- **Layout / density:** inspired by Codex desk (rail, empty state, composer)
+- **Color / brand:** [grok.com](https://grok.com) dark UI — near-black neutrals + **orange** accent (`#FF6A00`), not purple. Purple on grok.com is limited to special modes (e.g. incognito).
+
 ## Data flow
 
 ```
