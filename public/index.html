@@ -188,6 +188,25 @@
           <!-- Overlays transcript only (same grid cell) so chat scrolls under the dock -->
           <footer class="composer">
             <div class="composer-dock">
+              <!-- Earlier peek: active agent keeps running until explicit Resume -->
+              <div id="history-peek-bar" class="history-peek-bar" hidden>
+                <span id="history-peek-label" class="history-peek-label muted small">
+                  Preview
+                </span>
+                <div class="history-peek-actions">
+                  <button type="button" id="btn-back-active" class="btn subtle">
+                    Back to active
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-resume-history"
+                    class="btn primary"
+                    title="Stop the active session and continue this chat"
+                  >
+                    Resume chat
+                  </button>
+                </div>
+              </div>
               <div class="composer-context">
                 <button
                   type="button"

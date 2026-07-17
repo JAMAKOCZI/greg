@@ -9,6 +9,13 @@ Codex-style **local web workspace** for Grok Build. Greg is the UI shell; Grok B
 - **Layout / density:** inspired by Codex desk (rail, empty state, composer)
 - **Color / brand:** [grok.com](https://grok.com) dark UI — near-black neutrals + **orange** accent (`#FF6A00`), not purple. Purple on grok.com is limited to special modes (e.g. incognito).
 
+## Sessions (product rules)
+
+- **One live agent** at a time (server + UI). New task / **Resume chat** stops other live processes.
+- **Earlier peek is read-only:** opening a saved chat parks the live transcript and keeps the agent running in the background. SSE still updates the parked DOM.
+- **Resume chat** (composer bar) explicitly stops the active session and resumes that history id. **Back to active** restores the parked live view without killing anything.
+- Interactive permission prompts while peeking auto-return focus to the live session.
+
 ## Data flow
 
 ```

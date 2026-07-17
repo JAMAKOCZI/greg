@@ -809,6 +809,12 @@ body {
   background: rgba(255, 106, 0, 0.08);
 }
 
+/* Live session kept running while viewing Earlier */
+.chat-item.background {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .chat-item.dead {
   opacity: 0.55;
 }
@@ -1956,6 +1962,42 @@ body.files-open .main-body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   pointer-events: auto;
+}
+
+/* Earlier preview — active session stays alive until Resume */
+.history-peek-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 106, 0, 0.22);
+  background: rgba(255, 106, 0, 0.06);
+}
+
+.history-peek-bar[hidden] {
+  display: none !important;
+}
+
+.history-peek-label {
+  min-width: 0;
+  flex: 1;
+  line-height: 1.35;
+}
+
+.history-peek-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.history-peek-actions .btn.primary {
+  padding: 6px 12px;
+  font-size: 12.5px;
 }
 
 .composer-dock:focus-within {

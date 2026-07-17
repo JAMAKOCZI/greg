@@ -67,6 +67,10 @@ const els = {
   importGrokRefresh: $("import-grok-refresh"),
   importGrokDone: $("import-grok-done"),
   composer: document.querySelector(".composer"),
+  historyPeekBar: $("history-peek-bar"),
+  historyPeekLabel: $("history-peek-label"),
+  btnBackActive: $("btn-back-active"),
+  btnResumeHistory: $("btn-resume-history"),
 };
 
 /** When set, main pane is a read-only history replay (not a live tab). */
@@ -586,11 +590,19 @@ function scrollTranscript(opts = {}) {
   stickTranscriptToBottom = true;
 }
 
-/** Message host for a tab: live transcript if active, else parked fragment. */
+/**
+ * Message host for a tab: live transcript only when this tab is focused and
+ * we are not peeking an Earlier chat (background live stays in park).
+ */
 function messageHost(st) {
-  if (st.tabId === activeTabId) return els.transcript;
+  if (st.tabId === activeTabId && !historyViewId) return els.transcript;
   if (!st.park) st.park = document.createDocumentFragment();
   return st.park;
+}
+
+/** True when the main pane shows a saved chat, not the live tab DOM. */
+function isHistoryPeek() {
+  return Boolean(historyViewId);
 }
 
 /**
@@ -648,7 +660,7 @@ function appendBubble(st, kind, text, { role } = {}) {
     }
   }
   host.appendChild(div);
-  if (st.tabId === activeTabId) {
+  if (st.tabId === activeTabId && !historyViewId) {
     markTranscriptFilled();
     scrollTranscript();
   }
@@ -737,7 +749,7 @@ function appendToLive(st, kind, chunk) {
     }
     appendMarkdownChunk(st.liveAgentBubble, chunk, { streaming: true });
   }
-  if (st.tabId === activeTabId) scrollTranscript();
+  if (st.tabId === activeTabId && !historyViewId) scrollTranscript();
 }
 
 function resetLive(st) {
@@ -760,6 +772,8 @@ function resetLive(st) {
 /** Park active transcript messages into tab.park (keeps empty-state in place). */
 function parkActiveTranscript(st) {
   if (!st || st.tabId !== activeTabId) return;
+  // Transcript may be a history peek — never fold that into the live park
+  if (historyViewId) return;
   const frag = document.createDocumentFragment();
   for (const child of [...els.transcript.children]) {
     if (child === els.emptyState) continue;
@@ -1397,7 +1411,7 @@ function mountTabCard(st, card, isNew) {
   if (isNew || !card.parentNode) {
     host.appendChild(card);
   }
-  if (st.tabId === activeTabId) {
+  if (st.tabId === activeTabId && !historyViewId) {
     markTranscriptFilled();
     scrollTranscript();
   }
@@ -1507,6 +1521,8 @@ function renderSessionList() {
     const row = document.createElement("div");
     row.className = "chat-item session-item";
     if (st.tabId === activeTabId && !historyViewId) row.classList.add("active");
+    // Live tab still owned while peeking Earlier — not "active" chrome, but alive
+    if (st.tabId === activeTabId && historyViewId) row.classList.add("background");
     if (!st.alive) row.classList.add("dead");
     if (st.sending) row.classList.add("busy");
 
@@ -1640,7 +1656,10 @@ function connectStream(st) {
       const tab = tabStates.get(boundTabId);
       if (!tab) return;
       appendBubble(tab, "system", data.message || "Agent error");
-      if (boundTabId === activeTabId) setStatus("error", "Error");
+      if (boundTabId === activeTabId) {
+        if (historyViewId) applyHistoryPeekChrome();
+        else setStatus("error", "Error");
+      }
     } catch {
       /* EventSource network error also fires "error" without data */
     }
@@ -1658,12 +1677,17 @@ function connectStream(st) {
         tab.stream = null;
       }
       if (boundTabId === activeTabId) {
-        setStatus("idle", "Disconnected");
-        setComposerEnabled(false);
-        setStopEnabled(false);
-        updateSessionLabel(tab);
+        if (historyViewId) {
+          applyHistoryPeekChrome();
+        } else {
+          setStatus("idle", "Disconnected");
+          setComposerEnabled(false);
+          setStopEnabled(false);
+          updateSessionLabel(tab);
+        }
       }
       renderSessionList();
+      syncHistoryPeekBar();
     } catch {
       /* ignore */
     }
@@ -1993,6 +2017,12 @@ async function handleAcpRequest(tabId, msg) {
     auto: false,
   });
 
+  // Peek hides live DOM — jump back so the user can Approve / Deny
+  if (historyViewId && tabId === activeTabId) {
+    switchToTab(tabId);
+    setStatus("busy", "Permission needed");
+  }
+
   if (msg.id == null) {
     resolvePermissionCard(card, {
       label: "No request id — cannot respond",
@@ -2090,7 +2120,7 @@ function renderPermissionCard(st, { summary, options: _options, auto }) {
   card.appendChild(outcome);
 
   messageHost(st).appendChild(card);
-  if (st.tabId === activeTabId) {
+  if (st.tabId === activeTabId && !historyViewId) {
     markTranscriptFilled();
     scrollTranscript();
   }
@@ -2189,16 +2219,90 @@ async function answerPermission(tabId, card, requestId, opt) {
 // ── Session / composer ───────────────────────────────────────
 
 /**
+ * Composer chrome while peeking an Earlier chat (prompt locked; Resume / Back).
+ */
+function syncHistoryPeekBar() {
+  const bar = els.historyPeekBar;
+  if (!bar) return;
+  const peeking = isHistoryPeek();
+  bar.hidden = !peeking;
+  if (!peeking) return;
+
+  const live = activeState();
+  const label = els.historyPeekLabel;
+  if (label) {
+    if (live?.sending) {
+      label.textContent =
+        "Preview — active task still running in the background";
+    } else if (live?.alive) {
+      label.textContent =
+        "Preview — active session kept alive (Resume stops it)";
+    } else {
+      label.textContent = "Preview — read only until you Resume this chat";
+    }
+  }
+  if (els.btnBackActive) {
+    els.btnBackActive.hidden = !live;
+    els.btnBackActive.disabled = !live;
+  }
+  if (els.btnResumeHistory) {
+    els.btnResumeHistory.disabled = creatingSession || Boolean(pendingResumeId);
+  }
+}
+
+/**
+ * Status + stop + session label while peeking history.
+ * @param {{ title?: string|null, cwd?: string }} [doc]
+ */
+function applyHistoryPeekChrome(doc = null) {
+  const live = activeState();
+  const title =
+    doc?.title ||
+    historyCache.find((h) => h.id === historyViewId)?.title ||
+    null;
+  const base =
+    cwdBase(doc?.cwd) ||
+    historyCache.find((h) => h.id === historyViewId)?.cwdBase ||
+    "";
+  if (els.sessionLabel) {
+    const name = title || base || `chat · ${shortId(historyViewId)}`;
+    els.sessionLabel.textContent = live?.alive
+      ? `${name} · preview`
+      : `${name} · offline`;
+  }
+  if (live?.sending) setStatus("busy", "Preview · bg running");
+  else if (live?.alive) setStatus("idle", "Preview");
+  else setStatus("idle", "View only");
+  setStopEnabled(Boolean(live?.alive));
+  setComposerEnabled(false);
+  if (els.hint) {
+    els.hint.textContent = live?.alive
+      ? "Preview — Back to active or Resume chat"
+      : "Preview — Resume chat to continue";
+  }
+  syncHistoryPeekBar();
+}
+
+/**
  * Refresh composer/cancel/status from the *active* tab only.
  * Background tabs keep their own `sending` flags independently.
  */
 function refreshActiveComposer() {
+  if (isHistoryPeek()) {
+    els.prompt.disabled = true;
+    els.btnSend.disabled = true;
+    setCancelVisible(false);
+    applyHistoryPeekChrome();
+    return;
+  }
+
   const st = activeState();
   if (!st) {
     els.prompt.disabled = true;
     els.btnSend.disabled = true;
     setCancelVisible(false);
     els.hint.textContent = "New task to start";
+    syncHistoryPeekBar();
     return;
   }
 
@@ -2219,6 +2323,7 @@ function refreshActiveComposer() {
   } else {
     els.hint.textContent = "Enter to send · Ctrl+. cancel";
   }
+  syncHistoryPeekBar();
 }
 
 /** @deprecated use refreshActiveComposer — kept for call sites that pass bool */
@@ -2264,13 +2369,18 @@ async function handleEmptyCard(action) {
   const text = prompts[action];
   if (!text) return;
 
+  // Leave Earlier peek so empty-state actions hit the live session
+  if (historyViewId && activeState()?.alive) {
+    returnToActiveSession();
+  }
+
   // Ensure a live session, then fill + send
   let st = activeState();
   if (!st?.alive) {
     await newSession();
     st = activeState();
   }
-  if (!st?.alive) return;
+  if (!st?.alive || historyViewId) return;
   els.prompt.value = text;
   st.draft = text;
   void sendPrompt();
@@ -2287,7 +2397,7 @@ function setCancelVisible(visible) {
 }
 
 /**
- * Switch UI to another live tab.
+ * Leave Earlier peek and show a live tab (does not stop any agent).
  * @param {string} tabId
  */
 function switchToTab(tabId) {
@@ -2295,22 +2405,29 @@ function switchToTab(tabId) {
   const next = tabStates.get(tabId);
   if (!next) return;
 
-  // Leaving history replay
+  const leavingPeek = Boolean(historyViewId);
   historyViewId = null;
 
-  // Hide first (keep nodes so we can park), then swap, then show once
-  beginTranscriptSwap({ clear: false });
-  const prev = activeState();
-  if (prev && activeTabId) {
-    prev.draft = els.prompt.value;
-    parkActiveTranscript(prev);
+  if (leavingPeek) {
+    // Transcript holds history paint; live messages already live in next.park
+    beginTranscriptSwap({ clear: true });
+    activeTabId = tabId;
+    restoreTranscript(next);
+    endTranscriptSwap();
   } else {
-    clearTranscriptMessages();
+    // Hide first (keep nodes so we can park), then swap, then show once
+    beginTranscriptSwap({ clear: false });
+    const prev = activeState();
+    if (prev && activeTabId) {
+      prev.draft = els.prompt.value;
+      parkActiveTranscript(prev);
+    } else {
+      clearTranscriptMessages();
+    }
+    activeTabId = tabId;
+    restoreTranscript(next);
+    endTranscriptSwap();
   }
-
-  activeTabId = tabId;
-  restoreTranscript(next);
-  endTranscriptSwap();
 
   els.prompt.value = next.draft || "";
   if (next.cwd) setWorkspacePath(next.cwd);
@@ -2327,22 +2444,139 @@ function switchToTab(tabId) {
   }
   renderSessionList();
   renderHistoryList();
+  syncHistoryPeekBar();
   syncFilesPanelToWorkspace();
   if (next.alive) els.prompt.focus();
 }
 
+/** Return from Earlier peek to the current live session (if any). */
+function returnToActiveSession() {
+  const st = activeState();
+  if (!st) {
+    // No live tab — stay on peek or clear
+    if (historyViewId) applyHistoryPeekChrome();
+    return;
+  }
+  switchToTab(st.tabId);
+  closeSidebar();
+}
+
 /**
- * Open a saved chat and auto-resume the agent in the same workspace.
- * Reuses the transcript id so new messages append to the same history file.
- * Falls back to read-only view only if the agent fails to start.
+ * Open a saved chat as a read-only preview. Does **not** stop the active
+ * agent — use {@link resumeHistory} to continue that chat (stops active).
  * @param {string} id
  */
 async function openHistory(id) {
+  return viewHistory(id);
+}
+
+/**
+ * Peek Earlier chat without killing the live session.
+ * Live transcript is parked; SSE continues into park until Back / Resume.
+ * @param {string} id
+ */
+async function viewHistory(id) {
+  const gen = ++historyLoadGen;
+  clearPendingResume();
+
+  // Already live under this id → focus it (no other tabs demoted)
+  const liveSame = tabStates.get(id);
+  if (liveSame?.alive) {
+    historyViewId = null;
+    switchToTab(id);
+    closeSidebar();
+    void refreshHistory();
+    return;
+  }
+
+  // Re-click same peek — just ensure chrome
+  if (historyViewId === id) {
+    closeSidebar();
+    applyHistoryPeekChrome();
+    return;
+  }
+
+  closeSidebar();
+
+  // Park live DOM once when leaving the focused live view
+  const liveSt = activeState();
+  if (liveSt && !historyViewId) {
+    liveSt.draft = els.prompt.value;
+    beginTranscriptSwap({ clear: false });
+    parkActiveTranscript(liveSt);
+  } else {
+    beginTranscriptSwap({ clear: true });
+  }
+
+  // Keep activeTabId so background agent + SSE stay owned by the live tab
+  historyViewId = id;
+  setComposerEnabled(false);
+  applyHistoryPeekChrome();
+  renderSessionList();
+  renderHistoryList();
+
+  /** @type {object|null} */
+  let doc = null;
+  try {
+    doc = await api(`/api/history/${encodeURIComponent(id)}`);
+  } catch (e) {
+    if (gen !== historyLoadGen) return;
+    historyViewId = null;
+    setStatus("error", "Failed");
+    clearTranscriptMessages();
+    const div = document.createElement("div");
+    div.className = "bubble system";
+    div.textContent = `Failed to load chat: ${e.message}`;
+    els.transcript.appendChild(div);
+    markTranscriptFilled();
+    endTranscriptSwap();
+    // Restore live if we had one parked
+    const st = activeState();
+    if (st) {
+      restoreTranscript(st);
+      updateSessionLabel(st);
+      setStopEnabled(st.alive);
+      refreshActiveComposer();
+      if (st.alive) {
+        setStatus(st.sending ? "busy" : "ready", st.sending ? "Running…" : "Ready");
+      }
+    } else {
+      syncHistoryPeekBar();
+    }
+    renderSessionList();
+    renderHistoryList();
+    return;
+  }
+  if (gen !== historyLoadGen) return;
+
+  // Stale if user started resume/new while we loaded
+  if (pendingResumeId || (creatingSession && !isHistoryPeek())) {
+    return;
+  }
+
+  if (doc.cwd) setWorkspacePath(doc.cwd);
+  syncFilesPanelToWorkspace({ force: true });
+
+  paintHistoryMessages(doc.messages || []);
+  endTranscriptSwap();
+  historyViewId = id;
+  applyHistoryPeekChrome(doc);
+  renderSessionList();
+  renderHistoryList();
+}
+
+/**
+ * Stop the active agent (if any) and resume a saved chat as the live session.
+ * Reuses the transcript id so new messages append to the same history file.
+ * @param {string} id
+ */
+async function resumeHistory(id) {
+  if (!id || creatingSession) return;
   const gen = ++historyLoadGen;
 
-  // Already live under this id → just switch (and drop any stray other tabs)
-  const live = tabStates.get(id);
-  if (live?.alive) {
+  // Already live → just focus
+  const liveSame = tabStates.get(id);
+  if (liveSame?.alive) {
     clearPendingResume();
     historyViewId = null;
     demoteLiveTabsOptimistic(id);
@@ -2354,9 +2588,6 @@ async function openHistory(id) {
     return;
   }
 
-  // ── Optimistic sidebar (sync, before any await) ──────────────
-  // From: Active=A, Earlier=B  →  immediately Active=B(resuming), Earlier=A
-  // Without this, stop/fetch leaves A in Active while A+B both show in Earlier.
   const histItem = historyCache.find((h) => h.id === id) || null;
   pendingResumeId = id;
   pendingResumeMeta = {
@@ -2364,6 +2595,8 @@ async function openHistory(id) {
     cwd: histItem?.cwd || "",
     cwdBase: histItem?.cwdBase || cwdBase(histItem?.cwd) || "",
   };
+
+  // Explicit resume: stop every other live agent (product: one live session)
   demoteLiveTabsOptimistic(null);
   activeTabId = null;
   historyViewId = null;
@@ -2381,6 +2614,7 @@ async function openHistory(id) {
       `chat · ${shortId(id)}`;
     els.sessionLabel.textContent = `${t} · resuming…`;
   }
+  syncHistoryPeekBar();
   renderSessionList();
   renderHistoryList();
 
@@ -2389,7 +2623,6 @@ async function openHistory(id) {
   try {
     doc = await api(`/api/history/${encodeURIComponent(id)}`);
   } catch (e) {
-    // Stale gen must not end swap — newer openHistory owns reveal
     if (gen !== historyLoadGen) return;
     clearPendingResume();
     setStatus("error", "Failed");
@@ -2402,11 +2635,11 @@ async function openHistory(id) {
     endTranscriptSwap();
     renderSessionList();
     renderHistoryList();
+    syncHistoryPeekBar();
     return;
   }
   if (gen !== historyLoadGen) return;
 
-  // Refresh pending label from loaded doc
   pendingResumeMeta = {
     title: doc.title ?? pendingResumeMeta?.title ?? null,
     cwd: doc.cwd || pendingResumeMeta?.cwd || "",
@@ -2417,26 +2650,17 @@ async function openHistory(id) {
   if (doc.cwd) setWorkspacePath(doc.cwd);
   syncFilesPanelToWorkspace({ force: true });
 
-  // One atomic paint, then reveal
   paintHistoryMessages(doc.messages || []);
   endTranscriptSwap();
 
   await flushSettingsSave();
   if (gen !== historyLoadGen) return;
 
-  // Concurrent New task / other resume owns session creation — stay view-only
   if (creatingSession) {
     clearPendingResume();
     historyViewId = id;
     activeTabId = null;
-    setStatus("idle", "View only");
-    setComposerEnabled(false);
-    setStopEnabled(false);
-    if (els.sessionLabel) {
-      els.sessionLabel.textContent = doc.title
-        ? `${doc.title} · offline`
-        : `chat · ${shortId(id)}`;
-    }
+    applyHistoryPeekChrome(doc);
     renderSessionList();
     renderHistoryList();
     return;
@@ -2457,12 +2681,10 @@ async function openHistory(id) {
       }),
     });
     if (gen !== historyLoadGen) {
-      // Abandoned resume left a live agent the client will never adopt
       stopServerTabBackground(data?.tabId);
       return;
     }
 
-    // Drop any stray live tabs; keep the resumed id
     demoteLiveTabsOptimistic(data.tabId);
 
     const st = ensureTabState({
@@ -2478,7 +2700,6 @@ async function openHistory(id) {
     st.park = null;
     resetLive(st);
 
-    // Live tab now owns Active — clear optimistic placeholder
     clearPendingResume();
     activeTabId = st.tabId;
     historyViewId = null;
@@ -2503,6 +2724,7 @@ async function openHistory(id) {
     setStatus("ready", "Ready");
     setComposerEnabled(true);
     setStopEnabled(true);
+    syncHistoryPeekBar();
     renderSessionList();
     renderHistoryList();
     void refreshHistory();
@@ -2511,7 +2733,6 @@ async function openHistory(id) {
     els.prompt.focus();
   } catch (e) {
     if (gen !== historyLoadGen) return;
-    // Fallback: view transcript only if agent cannot start
     clearPendingResume();
     historyViewId = id;
     activeTabId = null;
@@ -2523,7 +2744,6 @@ async function openHistory(id) {
       : `chat · ${shortId(id)}`;
     els.hint.textContent =
       "Could not resume agent — transcript only. Fix grok / try New task.";
-    // History is already painted — only add the error note
     const div = document.createElement("div");
     div.className = "bubble system";
     div.textContent = `Resume failed: ${e.message}${
@@ -2532,11 +2752,13 @@ async function openHistory(id) {
     els.transcript.appendChild(div);
     markTranscriptFilled();
     scrollTranscript({ force: true });
+    syncHistoryPeekBar();
     renderSessionList();
     renderHistoryList();
   } finally {
     creatingSession = false;
     if (els.btnNew) els.btnNew.disabled = false;
+    syncHistoryPeekBar();
   }
 }
 
@@ -2787,13 +3009,34 @@ function renderHistoryList() {
         });
         if (historyViewId === item.id) {
           historyViewId = null;
-          for (const child of [...els.transcript.children]) {
-            if (child !== els.emptyState) child.remove();
+          const live = activeState();
+          if (live) {
+            beginTranscriptSwap({ clear: true });
+            restoreTranscript(live);
+            endTranscriptSwap();
+            updateSessionLabel(live);
+            setStopEnabled(live.alive);
+            refreshActiveComposer();
+            if (live.alive) {
+              setStatus(
+                live.sending ? "busy" : "ready",
+                live.sending ? "Running…" : "Ready",
+              );
+            } else {
+              setStatus("idle", "Disconnected");
+            }
+          } else {
+            for (const child of [...els.transcript.children]) {
+              if (child !== els.emptyState) child.remove();
+            }
+            els.transcript.classList.remove("has-messages");
+            updateSessionLabel(null);
+            setStatus("idle", "Idle");
+            setComposerEnabled(false);
+            setStopEnabled(false);
           }
-          els.transcript.classList.remove("has-messages");
-          updateSessionLabel(null);
-          setStatus("idle", "Idle");
-          setComposerEnabled(false);
+          syncHistoryPeekBar();
+          renderSessionList();
         }
         await refreshHistory();
       } catch (err) {
@@ -2856,6 +3099,8 @@ async function newSession() {
   historyLoadGen += 1;
   clearPendingResume();
   endTranscriptSwap();
+  historyViewId = null;
+  syncHistoryPeekBar();
   setStatus("busy", "Starting agent…");
   setComposerEnabled(false);
   setStopEnabled(false);
@@ -2874,6 +3119,7 @@ async function newSession() {
   historyViewId = null;
   activeTabId = null;
   els.prompt.value = "";
+  syncHistoryPeekBar();
 
   try {
     const data = await api("/api/session/new", {
@@ -2955,7 +3201,7 @@ async function stopSession(tabId = activeTabId) {
   const ok = await stopSessionCore(tabId);
   if (!ok && tabStates.has(tabId)) {
     if (tabId === activeTabId) {
-      appendBubble(st, "system", "Stop failed");
+      if (!historyViewId) appendBubble(st, "system", "Stop failed");
       setStopEnabled(true);
     }
     return;
@@ -2964,6 +3210,13 @@ async function stopSession(tabId = activeTabId) {
 
   if (activeTabId === tabId) {
     activeTabId = null;
+    if (historyViewId) {
+      // Stay on Earlier peek; background live is gone
+      applyHistoryPeekChrome();
+      renderSessionList();
+      renderHistoryList();
+      return;
+    }
     // Single-session product: no multi-tab switch after stop
     for (const child of [...els.transcript.children]) {
       if (child !== els.emptyState) child.remove();
@@ -2974,6 +3227,7 @@ async function stopSession(tabId = activeTabId) {
     setStatus("idle", "Idle");
     setComposerEnabled(false);
     setStopEnabled(false);
+    syncHistoryPeekBar();
     renderSessionList();
   } else {
     renderSessionList();
@@ -2981,6 +3235,7 @@ async function stopSession(tabId = activeTabId) {
 }
 
 async function sendPrompt() {
+  if (historyViewId) return; // preview is read-only
   const text = els.prompt.value.trim();
   const st = activeState();
   if (!text || !st || !st.alive || st.sending) return;
@@ -2994,8 +3249,11 @@ async function sendPrompt() {
   st.sending = true;
   st.cancelHttpInflight = false;
   if (st.tabId === activeTabId) {
-    setStatus("busy", "Running…");
-    refreshActiveComposer();
+    if (historyViewId) applyHistoryPeekChrome();
+    else {
+      setStatus("busy", "Running…");
+      refreshActiveComposer();
+    }
   }
   renderSessionList();
 
@@ -3003,10 +3261,11 @@ async function sendPrompt() {
     const oneLine = text.replace(/\s+/g, " ").trim();
     st.title =
       oneLine.length <= 40 ? oneLine : oneLine.slice(0, 40).trimEnd() + "…";
-    updateSessionLabel(st);
+    if (!historyViewId) updateSessionLabel(st);
   }
   st.lastActiveAt = Date.now();
   renderSessionList();
+  if (historyViewId) syncHistoryPeekBar();
 
   try {
     const data = await api("/api/prompt", {
@@ -3015,7 +3274,7 @@ async function sendPrompt() {
     });
     if (data.title) st.title = data.title;
     if (data.lastActiveAt) st.lastActiveAt = data.lastActiveAt;
-    updateSessionLabel(st);
+    if (!historyViewId) updateSessionLabel(st);
 
     const cancelled = data.result?.stopReason === "cancelled";
     // Final markdown pass (complete fences, no "streaming…" badge)
@@ -3027,7 +3286,8 @@ async function sendPrompt() {
       appendBubble(st, "system", "Turn cancelled");
     }
     if (st.tabId === activeTabId) {
-      if (cancelled) setStatus("ready", "Cancelled");
+      if (historyViewId) applyHistoryPeekChrome();
+      else if (cancelled) setStatus("ready", "Cancelled");
       else if (st.alive) setStatus("ready", "Ready");
     }
   } catch (e) {
@@ -3035,7 +3295,10 @@ async function sendPrompt() {
     discardEmptyAgentBubble(st.liveAgentBubble);
     st.liveAgentBubble = null;
     appendBubble(st, "system", e.message);
-    if (st.tabId === activeTabId) setStatus("error", "Error");
+    if (st.tabId === activeTabId) {
+      if (historyViewId) applyHistoryPeekChrome();
+      else setStatus("error", "Error");
+    }
   } finally {
     st.sending = false;
     st.cancelHttpInflight = false;
@@ -3082,7 +3345,8 @@ async function cancelTurn(tabId) {
       body: JSON.stringify({ tabId: targetId, reason: "user" }),
     });
     if (targetId === activeTabId) {
-      if (data.hadPending === false) {
+      if (historyViewId) applyHistoryPeekChrome();
+      else if (data.hadPending === false) {
         setStatus("busy", "Cancel sent (no pending turn on agent)");
       } else {
         setStatus("busy", "Cancelling…");
@@ -3090,7 +3354,10 @@ async function cancelTurn(tabId) {
     }
   } catch (e) {
     appendBubble(st, "system", `Cancel failed: ${e.message}`);
-    if (targetId === activeTabId) setStatus("error", "Cancel failed");
+    if (targetId === activeTabId) {
+      if (historyViewId) applyHistoryPeekChrome();
+      else setStatus("error", "Cancel failed");
+    }
   } finally {
     st.cancelHttpInflight = false;
     if (targetId === activeTabId) refreshActiveComposer();
@@ -3213,6 +3480,14 @@ if (els.transcript) {
 
 els.btnNew.addEventListener("click", () => newSession());
 els.btnSend.addEventListener("click", () => sendPrompt());
+if (els.btnBackActive) {
+  els.btnBackActive.addEventListener("click", () => returnToActiveSession());
+}
+if (els.btnResumeHistory) {
+  els.btnResumeHistory.addEventListener("click", () => {
+    if (historyViewId) void resumeHistory(historyViewId);
+  });
+}
 
 if (els.composerProject) {
   els.composerProject.addEventListener("click", () => openFolderPicker());

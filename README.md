@@ -8,7 +8,7 @@ Greg is a browser UI that runs on your machine and talks to the official `grok` 
 
 ## Status
 
-Early (`0.9.0`). Multi-session desk with cancel, history, recents, settings (model + **effort** dropdowns), hardened ACP tool/diff/plan cards, read-only workspace file tree, and **optional import** of Grok Build chats from `~/.grok/sessions`.
+Early (`0.9.0`). Single live agent desk with cancel, durable history (Earlier is **preview** — active keeps running until **Resume chat**), recents, settings (model + **effort** dropdowns), hardened ACP tool/diff/plan cards, read-only workspace file tree, and **optional import** of Grok Build chats from `~/.grok/sessions`.
 
 ## Requirements
 
