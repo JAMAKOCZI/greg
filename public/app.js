@@ -75,6 +75,14 @@ let historyViewId = null;
 let historyLoadGen = 0;
 /** Throttle disk history refresh (not every prompt). */
 let historyRefreshTimer = null;
+/**
+ * While resuming Earlier chat B, show B under Active immediately and keep it
+ * out of Earlier — avoids the flash where A is still Active and A+B both in Earlier.
+ * @type {string|null}
+ */
+let pendingResumeId = null;
+/** @type {{ title?: string|null, cwd?: string, cwdBase?: string }|null} */
+let pendingResumeMeta = null;
 
 /** @type {string|null} */
 let activeTabId = null;
@@ -1395,6 +1403,59 @@ function mountTabCard(st, card, isNew) {
   return card;
 }
 
+/**
+ * Push a live tab into historyCache so it appears under Earlier immediately
+ * when demoted (before the next /api/history round-trip).
+ * @param {TabState} st
+ */
+function seedHistoryCacheFromTab(st) {
+  if (!st?.tabId) return;
+  const id = st.tabId;
+  const idx = historyCache.findIndex((h) => h.id === id);
+  const prev = idx >= 0 ? historyCache[idx] : null;
+  const row = {
+    id,
+    title: st.title ?? prev?.title ?? null,
+    cwd: st.cwd || prev?.cwd || "",
+    cwdBase: cwdBase(st.cwd) || prev?.cwdBase || "",
+    updatedAt: Date.now(),
+    messageCount: prev?.messageCount ?? 0,
+    ...(prev?.source ? { source: prev.source } : {}),
+  };
+  if (idx >= 0) historyCache.splice(idx, 1);
+  historyCache.unshift(row);
+}
+
+/**
+ * Demote all live tabs to Earlier in the sidebar (optimistic), stop agents.
+ * @param {string|null} [keepId]
+ * @returns {string[]} stopped tab ids
+ */
+function demoteLiveTabsOptimistic(keepId = null) {
+  /** @type {string[]} */
+  const stopped = [];
+  for (const id of [...tabStates.keys()]) {
+    if (keepId && id === keepId) continue;
+    const st = tabStates.get(id);
+    if (!st) continue;
+    seedHistoryCacheFromTab(st);
+    closeStream(st);
+    tabStates.delete(id);
+    stopped.push(id);
+    // Server stop in background — UI already moved
+    void api("/api/session/stop", {
+      method: "POST",
+      body: JSON.stringify({ tabId: id }),
+    }).catch(() => {});
+  }
+  return stopped;
+}
+
+function clearPendingResume() {
+  pendingResumeId = null;
+  pendingResumeMeta = null;
+}
+
 function renderSessionList() {
   if (!els.sessionList) return;
   const items = [...tabStates.values()].sort(
@@ -1455,6 +1516,43 @@ function renderSessionList() {
 
     row.appendChild(pick);
     row.appendChild(close);
+    els.sessionList.appendChild(row);
+  }
+
+  // Optimistic Active row while Earlier chat is resuming (not yet in tabStates)
+  if (pendingResumeId && !tabStates.has(pendingResumeId)) {
+    const meta = pendingResumeMeta || {};
+    const row = document.createElement("div");
+    row.className = "chat-item session-item active busy";
+    row.dataset.pendingResume = pendingResumeId;
+
+    const pick = document.createElement("button");
+    pick.type = "button";
+    pick.className = "chat-pick session-pick";
+    pick.title = meta.cwd || pendingResumeId;
+    pick.disabled = true;
+
+    const dot = document.createElement("span");
+    dot.className = "chat-dot busy";
+    dot.setAttribute("aria-hidden", "true");
+
+    const body = document.createElement("span");
+    body.className = "chat-body";
+    const title = document.createElement("span");
+    title.className = "chat-title";
+    title.textContent =
+      meta.title || meta.cwdBase || `Chat ${shortId(pendingResumeId)}`;
+    body.appendChild(title);
+    if (meta.cwdBase) {
+      const sub = document.createElement("span");
+      sub.className = "chat-sub";
+      sub.textContent = meta.cwdBase;
+      body.appendChild(sub);
+    }
+
+    pick.appendChild(dot);
+    pick.appendChild(body);
+    row.appendChild(pick);
     els.sessionList.appendChild(row);
   }
 
@@ -2208,36 +2306,46 @@ async function openHistory(id) {
   // Already live under this id → just switch (and drop any stray other tabs)
   const live = tabStates.get(id);
   if (live?.alive) {
+    clearPendingResume();
     historyViewId = null;
-    await stopAllLiveSessions(id);
-    if (gen !== historyLoadGen) return;
+    demoteLiveTabsOptimistic(id);
+    renderSessionList();
+    renderHistoryList();
     switchToTab(id);
     closeSidebar();
+    void refreshHistory();
     return;
   }
 
-  // Hide + drop active chat immediately so it cannot stack under history paint
-  // during await stop / fetch (was a one-frame double transcript flash).
-  beginTranscriptSwap({ clear: true });
+  // ── Optimistic sidebar (sync, before any await) ──────────────
+  // From: Active=A, Earlier=B  →  immediately Active=B(resuming), Earlier=A
+  // Without this, stop/fetch leaves A in Active while A+B both show in Earlier.
+  const histItem = historyCache.find((h) => h.id === id) || null;
+  pendingResumeId = id;
+  pendingResumeMeta = {
+    title: histItem?.title ?? null,
+    cwd: histItem?.cwd || "",
+    cwdBase: histItem?.cwdBase || cwdBase(histItem?.cwd) || "",
+  };
+  demoteLiveTabsOptimistic(null);
   activeTabId = null;
   historyViewId = null;
+  beginTranscriptSwap({ clear: true });
   closeSidebar();
   setStatus("busy", "Resuming…");
   setComposerEnabled(false);
   setStopEnabled(false);
   els.prompt.value = "";
+  updateSessionLabel(null);
+  if (els.sessionLabel && pendingResumeMeta) {
+    const t =
+      pendingResumeMeta.title ||
+      pendingResumeMeta.cwdBase ||
+      `chat · ${shortId(id)}`;
+    els.sessionLabel.textContent = `${t} · resuming…`;
+  }
   renderSessionList();
-
-  // Single-session: stop current live agent before resuming history
-  try {
-    await stopAllLiveSessions(null);
-  } catch {
-    /* still try to load history */
-  }
-  if (gen !== historyLoadGen) {
-    endTranscriptSwap();
-    return;
-  }
+  renderHistoryList();
 
   /** @type {object|null} */
   let doc = null;
@@ -2248,6 +2356,7 @@ async function openHistory(id) {
       endTranscriptSwap();
       return;
     }
+    clearPendingResume();
     setStatus("error", "Failed");
     clearTranscriptMessages();
     const div = document.createElement("div");
@@ -2256,6 +2365,8 @@ async function openHistory(id) {
     els.transcript.appendChild(div);
     markTranscriptFilled();
     endTranscriptSwap();
+    renderSessionList();
+    renderHistoryList();
     return;
   }
   if (gen !== historyLoadGen) {
@@ -2263,10 +2374,18 @@ async function openHistory(id) {
     return;
   }
 
+  // Refresh pending label from loaded doc
+  pendingResumeMeta = {
+    title: doc.title ?? pendingResumeMeta?.title ?? null,
+    cwd: doc.cwd || pendingResumeMeta?.cwd || "",
+    cwdBase: cwdBase(doc.cwd) || pendingResumeMeta?.cwdBase || "",
+  };
+  renderSessionList();
+
   if (doc.cwd) setWorkspacePath(doc.cwd);
   syncFilesPanelToWorkspace({ force: true });
 
-  // One atomic paint, then reveal (never active+history together)
+  // One atomic paint, then reveal
   paintHistoryMessages(doc.messages || []);
   endTranscriptSwap();
 
@@ -2290,8 +2409,8 @@ async function openHistory(id) {
     });
     if (gen !== historyLoadGen) return;
 
-    // Ensure only this resume is live locally
-    await stopAllLiveSessions(data.tabId);
+    // Drop any stray live tabs; keep the resumed id
+    demoteLiveTabsOptimistic(data.tabId);
     for (const otherId of [...tabStates.keys()]) {
       if (otherId !== data.tabId) tabStates.delete(otherId);
     }
@@ -2309,7 +2428,8 @@ async function openHistory(id) {
     st.park = null;
     resetLive(st);
 
-    // Keep painted history in the live transcript (already on screen)
+    // Live tab now owns Active — clear optimistic placeholder
+    clearPendingResume();
     activeTabId = st.tabId;
     historyViewId = null;
 
@@ -2342,6 +2462,7 @@ async function openHistory(id) {
   } catch (e) {
     if (gen !== historyLoadGen) return;
     // Fallback: view transcript only if agent cannot start
+    clearPendingResume();
     historyViewId = id;
     activeTabId = null;
     setStatus("error", "View only");
@@ -2554,8 +2675,9 @@ function renderHistoryList() {
   if (!els.historyList) return;
   els.historyList.innerHTML = "";
 
-  // Live tabs already appear under active chats — skip same id in history
+  // Live tabs + in-flight resume appear under Active — skip them in Earlier
   const liveIds = new Set(tabStates.keys());
+  if (pendingResumeId) liveIds.add(pendingResumeId);
 
   for (const item of historyCache) {
     if (liveIds.has(item.id)) continue;
@@ -2666,9 +2788,15 @@ async function stopSessionCore(tabId) {
 async function stopAllLiveSessions(keepId = null) {
   const ids = [...tabStates.keys()].filter((id) => id !== keepId);
   for (const id of ids) {
+    const st = tabStates.get(id);
+    if (st) seedHistoryCacheFromTab(st);
     await stopSessionCore(id);
   }
-  if (ids.length) void refreshHistory();
+  if (ids.length) {
+    renderSessionList();
+    renderHistoryList();
+    void refreshHistory();
+  }
 }
 
 async function newSession() {
