@@ -3,6 +3,7 @@ import {
   upsertPlanCard,
   mergeToolUpdate,
 } from "./cards.js";
+import { setMarkdownBody } from "./markdown.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -521,13 +522,65 @@ function appendBubble(st, kind, text, { role } = {}) {
     r.textContent = role;
     div.appendChild(r);
   }
-  if (text) div.appendChild(document.createTextNode(text));
+  // Agent (+ user) get structured markdown body; system/tool stay plain
+  if (kind === "agent" || kind === "user") {
+    const body = document.createElement("div");
+    body.className = "md-body";
+    div.appendChild(body);
+    div._rawText = text || "";
+    if (text) setMarkdownBody(body, text, { streaming: false });
+  } else if (text) {
+    div.appendChild(document.createTextNode(text));
+  }
   host.appendChild(div);
   if (st.tabId === activeTabId) {
     markTranscriptFilled();
     scrollTranscript();
   }
   return div;
+}
+
+/**
+ * @param {HTMLElement|null|undefined} bubble
+ * @param {string} chunk
+ * @param {{ streaming?: boolean }} [opts]
+ */
+function appendMarkdownChunk(bubble, chunk, opts = {}) {
+  if (!bubble || !chunk) return;
+  bubble._rawText = (bubble._rawText || "") + chunk;
+  let body = bubble.querySelector(".md-body");
+  if (!body) {
+    body = document.createElement("div");
+    body.className = "md-body";
+    bubble.appendChild(body);
+  }
+  const streaming = opts.streaming !== false;
+  if (streaming) {
+    if (bubble._mdTimer) return;
+    bubble._mdTimer = setTimeout(() => {
+      bubble._mdTimer = null;
+      setMarkdownBody(body, bubble._rawText || "", { streaming: true });
+    }, 48);
+  } else {
+    if (bubble._mdTimer) {
+      clearTimeout(bubble._mdTimer);
+      bubble._mdTimer = null;
+    }
+    setMarkdownBody(body, bubble._rawText || "", { streaming: false });
+  }
+}
+
+/** @param {HTMLElement|null|undefined} bubble */
+function finalizeMarkdownBubble(bubble) {
+  if (!bubble) return;
+  if (bubble._mdTimer) {
+    clearTimeout(bubble._mdTimer);
+    bubble._mdTimer = null;
+  }
+  const raw = bubble._rawText;
+  if (raw == null) return;
+  const body = bubble.querySelector(".md-body");
+  if (body) setMarkdownBody(body, raw, { streaming: false });
 }
 
 function appendToLive(st, kind, chunk) {
@@ -537,18 +590,21 @@ function appendToLive(st, kind, chunk) {
     if (!st.liveThoughtBubble || !st.liveThoughtBubble.parentNode) {
       st.liveThoughtBubble = appendBubble(st, "thought", "", { role: "thinking" });
     }
+    // Thoughts stay plain text (noisy markdown breaks "thinking" chrome)
     st.liveThoughtBubble.appendChild(document.createTextNode(chunk));
   } else {
     if (!st.liveAgentBubble || !st.liveAgentBubble.parentNode) {
       st.liveAgentBubble = appendBubble(st, "agent", "", { role: "greg" });
     }
-    st.liveAgentBubble.appendChild(document.createTextNode(chunk));
+    appendMarkdownChunk(st.liveAgentBubble, chunk, { streaming: true });
   }
   if (st.tabId === activeTabId) scrollTranscript();
 }
 
 function resetLive(st) {
   if (!st) return;
+  // Finish any in-flight markdown so tool cards appear after final content
+  finalizeMarkdownBubble(st.liveAgentBubble);
   st.liveAgentBubble = null;
   st.liveThoughtBubble = null;
 }
@@ -2144,7 +2200,11 @@ function renderHistoryMessage(m, host = els.transcript) {
     r.className = "role";
     r.textContent = "you";
     div.appendChild(r);
-    div.appendChild(document.createTextNode(text));
+    const body = document.createElement("div");
+    body.className = "md-body";
+    div.appendChild(body);
+    div._rawText = text;
+    setMarkdownBody(body, text, { streaming: false });
     append(div);
     return;
   }
@@ -2155,7 +2215,11 @@ function renderHistoryMessage(m, host = els.transcript) {
     r.className = "role";
     r.textContent = "greg";
     div.appendChild(r);
-    div.appendChild(document.createTextNode(text));
+    const body = document.createElement("div");
+    body.className = "md-body";
+    div.appendChild(body);
+    div._rawText = text;
+    setMarkdownBody(body, text, { streaming: false });
     append(div);
     return;
   }
@@ -2541,6 +2605,8 @@ async function sendPrompt() {
     updateSessionLabel(st);
 
     const cancelled = data.result?.stopReason === "cancelled";
+    // Final markdown pass (complete fences, no "streaming…" badge)
+    finalizeMarkdownBubble(st.liveAgentBubble);
     if (cancelled) {
       // Always record on this tab's transcript (may be parked)
       appendBubble(st, "system", "Turn cancelled");
@@ -2550,6 +2616,7 @@ async function sendPrompt() {
       else if (st.alive) setStatus("ready", "Ready");
     }
   } catch (e) {
+    finalizeMarkdownBubble(st.liveAgentBubble);
     appendBubble(st, "system", e.message);
     if (st.tabId === activeTabId) setStatus("error", "Error");
   } finally {

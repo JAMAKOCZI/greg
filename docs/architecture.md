@@ -122,6 +122,18 @@ Response fields on `session/new`: `contextSeeded`, `contextSeed: { messageCount,
 
 Atomic writes: temp file + rename via `lib/transcript-store.mjs`.
 
+## Message rendering (markdown)
+
+Agent and user bubbles use client-side GFM-ish markdown (`public/markdown.js`):
+
+- Headings, lists, bold/italic, links, blockquotes
+- Fenced code blocks with language label, **Copy**, and lightweight token highlighting
+- GFM tables
+- No raw HTML passthrough (escaped)
+- Streaming: throttled re-render (~48ms); final pass when the turn ends or a tool card starts
+
+Thought / system / tool bubbles stay plain text.
+
 ## Agent stderr in the UI
 
 `grok agent stdio` writes diagnostics to **stderr**. Greg forwards chunks over SSE (`stderr` event) as system bubbles.
