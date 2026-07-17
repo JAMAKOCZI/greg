@@ -371,15 +371,15 @@ const server = createGregServer({
         tabs.delete(tabId);
       }
 
-      // Explicit body fields override settings for this session (null = no override)
-      let model = settings.model;
+      // Explicit body fields override settings; empty falls back to product defaults
+      let model = settings.model || "grok-4.5";
       if (Object.prototype.hasOwnProperty.call(body, "model")) {
         model =
           typeof body.model === "string" && body.model.trim()
             ? body.model.trim()
-            : null;
+            : "grok-4.5";
       }
-      let effort = settings.effort;
+      let effort = normalizeEffort(settings.effort) || "high";
       if (
         Object.prototype.hasOwnProperty.call(body, "effort") ||
         Object.prototype.hasOwnProperty.call(body, "reasoningEffort")
@@ -387,10 +387,7 @@ const server = createGregServer({
         const raw = Object.prototype.hasOwnProperty.call(body, "effort")
           ? body.effort
           : body.reasoningEffort;
-        effort =
-          raw == null || raw === ""
-            ? null
-            : normalizeEffort(raw);
+        effort = normalizeEffort(raw) || "high";
       }
       let alwaysApprove = settings.alwaysApprove;
       if (Object.prototype.hasOwnProperty.call(body, "alwaysApprove")) {
@@ -400,8 +397,8 @@ const server = createGregServer({
       const bridge = new AcpBridge({
         grokBin: GROK_BIN,
         cwd,
-        model: model || null,
-        effort: effort || null,
+        model,
+        effort,
         alwaysApprove,
       });
       const title =

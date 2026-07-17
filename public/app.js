@@ -385,8 +385,8 @@ async function api(path, opts = {}) {
 /** @type {{ alwaysApprove: boolean, model: string|null, effort: string|null, defaultCwd: string|null, theme: string }} */
 let settings = {
   alwaysApprove: false,
-  model: null,
-  effort: null,
+  model: "grok-4.5",
+  effort: "high",
   defaultCwd: null,
   theme: "dark",
 };
@@ -409,30 +409,41 @@ function populateModelSelect(prefer = null) {
   if (!els.model || els.model.tagName !== "SELECT") return;
   const current = prefer != null ? prefer : els.model.value;
   els.model.innerHTML = "";
-  const optDefault = document.createElement("option");
-  optDefault.value = "";
-  optDefault.textContent = "Default (agent)";
-  els.model.appendChild(optDefault);
 
-  const seen = new Set([""]);
-  for (const m of availableModels) {
+  // Prefer live list, but always offer grok-4.5 as the product default
+  const list =
+    availableModels.length > 0
+      ? availableModels
+      : [{ id: "grok-4.5", name: "Grok 4.5", default: true }];
+
+  const seen = new Set();
+  for (const m of list) {
     if (!m?.id || seen.has(m.id)) continue;
     seen.add(m.id);
     const opt = document.createElement("option");
     opt.value = m.id;
-    opt.textContent = m.default ? `${m.name} (default)` : m.name || m.id;
+    const isDefault = m.default || m.id === "grok-4.5";
+    opt.textContent = isDefault
+      ? `${m.name || m.id} (default)`
+      : m.name || m.id;
     opt.title = m.description || m.id;
     els.model.appendChild(opt);
   }
-  // Keep a previously saved model even if not in the live list
-  if (current && !seen.has(current)) {
+  if (!seen.has("grok-4.5")) {
     const opt = document.createElement("option");
-    opt.value = current;
-    opt.textContent = `${current} (saved)`;
+    opt.value = "grok-4.5";
+    opt.textContent = "Grok 4.5 (default)";
     els.model.appendChild(opt);
-    seen.add(current);
+    seen.add("grok-4.5");
   }
-  els.model.value = current && seen.has(current) ? current : "";
+
+  const pick =
+    current && seen.has(current)
+      ? current
+      : seen.has("grok-4.5")
+        ? "grok-4.5"
+        : [...seen][0] || "grok-4.5";
+  els.model.value = pick;
 }
 
 async function loadMeta() {
@@ -470,22 +481,24 @@ async function loadMeta() {
  * @param {{ alwaysApprove?: boolean, model?: string|null, effort?: string|null, defaultCwd?: string|null, theme?: string }} s
  */
 function applySettingsToUi(s) {
+  const effortRaw = s.effort;
+  const effort =
+    effortRaw === "low" || effortRaw === "medium" || effortRaw === "high"
+      ? effortRaw
+      : "high";
   settings = {
     alwaysApprove: s.alwaysApprove === true,
-    model: s.model ?? null,
-    effort: s.effort ?? null,
+    model: (s.model && String(s.model).trim()) || "grok-4.5",
+    effort,
     defaultCwd: s.defaultCwd ?? null,
     theme: s.theme || "dark",
   };
   if (els.alwaysApprove) els.alwaysApprove.checked = settings.alwaysApprove;
   if (els.model) {
-    populateModelSelect(settings.model || "");
-    els.model.value = settings.model || "";
+    populateModelSelect(settings.model);
   }
   if (els.effort) {
-    const e = settings.effort || "";
-    els.effort.value =
-      e === "low" || e === "medium" || e === "high" ? e : "";
+    els.effort.value = settings.effort;
   }
   if (els.defaultCwd) els.defaultCwd.value = settings.defaultCwd || "";
   settingsLoaded = true;
@@ -496,13 +509,22 @@ function readSettingsFromUi() {
   const effort =
     effortRaw === "low" || effortRaw === "medium" || effortRaw === "high"
       ? effortRaw
-      : null;
+      : "high";
   return {
     alwaysApprove: els.alwaysApprove?.checked === true,
-    model: (els.model?.value || "").trim() || null,
+    model: (els.model?.value || "").trim() || "grok-4.5",
     effort,
     defaultCwd: (els.defaultCwd?.value || "").trim() || null,
     theme: settings.theme || "dark",
+  };
+}
+
+/** Values sent on session/new — always concrete model + effort. */
+function sessionModelEffortFromUi() {
+  const s = readSettingsFromUi();
+  return {
+    model: s.model || "grok-4.5",
+    effort: s.effort || "high",
   };
 }
 
@@ -1990,11 +2012,7 @@ async function newSession() {
         cwd: els.cwd.value.trim() || undefined,
         // Always send explicit values so session matches the form (WYSIWYG)
         alwaysApprove: els.alwaysApprove?.checked === true,
-        model: (els.model?.value || "").trim() || null,
-        effort: (() => {
-          const e = (els.effort?.value || "").trim().toLowerCase();
-          return e === "low" || e === "medium" || e === "high" ? e : null;
-        })(),
+        ...sessionModelEffortFromUi(),
       }),
     });
 
@@ -2286,16 +2304,13 @@ function openSidebar() {
   syncSidebarChrome();
 }
 
+/**
+ * Dismiss mobile drawer only. Never collapses the desktop sidebar —
+ * session/history picks used to call this and hide the left panel.
+ */
 function closeSidebar() {
-  if (isMobileSidebar()) {
-    document.body.classList.remove("sidebar-open");
-    if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
-  } else {
-    // Desktop: collapse left column (hamburger reappears)
-    document.body.classList.add("sidebar-collapsed");
-    document.body.classList.remove("sidebar-open");
-    if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
-  }
+  document.body.classList.remove("sidebar-open");
+  if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
   syncSidebarChrome();
 }
 
@@ -2303,11 +2318,17 @@ function toggleSidebar() {
   if (isMobileSidebar()) {
     if (document.body.classList.contains("sidebar-open")) closeSidebar();
     else openSidebar();
-  } else if (document.body.classList.contains("sidebar-collapsed")) {
-    openSidebar();
-  } else {
-    closeSidebar();
+    return;
   }
+  // Desktop: explicit hamburger collapse / expand only
+  if (document.body.classList.contains("sidebar-collapsed")) {
+    document.body.classList.remove("sidebar-collapsed");
+  } else {
+    document.body.classList.add("sidebar-collapsed");
+  }
+  document.body.classList.remove("sidebar-open");
+  if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
+  syncSidebarChrome();
 }
 
 // ── Events ───────────────────────────────────────────────────

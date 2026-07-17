@@ -70,11 +70,11 @@ Capture notes: `scripts/capture-acp-fixtures.md` (no secrets).
 ## Settings (v0.6+)
 
 - File: `~/.greg/settings.json` (`GREG_SETTINGS_PATH` override)
-- Fields: `alwaysApprove`, `model`, `effort` (`low`|`medium`|`high`|null), `defaultCwd`, `theme`
-- UI: **select** for model and effort (not free text)
-- Model list: `GET /api/models` / `/api/meta.models` from `~/.grok/models_cache.json` (official CLI cache), fallback known catalog (`grok-4.5` as of 2026-07)
-- Spawn: `grok agent [-m MODEL] [--reasoning-effort EFFORT] [--always-approve] stdio`
-- `session/new`: body `model` / `effort` / `alwaysApprove` override settings when present (null = no override)
+- Fields: `alwaysApprove`, `model` (default `grok-4.5`), `effort` (`low`|`medium`|`high`, default `high`), `defaultCwd`, `theme`
+- UI: **select** for model (`Grok 4.5 (default)`) and effort (`Low` / `Medium` / `High (default)`)
+- Model list: `GET /api/models` / `/api/meta.models` from `~/.grok/models_cache.json`, fallback `grok-4.5`
+- Spawn always: `grok agent -m <model> --reasoning-effort <effort> [--always-approve] stdio`
+- `session/new`: body `model` / `effort` / `alwaysApprove` override settings; empty → product defaults
 - `defaultCwd` on PUT is validated via `resolveWorkspace`
 - Effective default workspace: settings.defaultCwd → `GREG_CWD` → process cwd
 
