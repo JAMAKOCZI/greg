@@ -11,14 +11,33 @@ export function escapeHtml(s) {
     .replaceAll('"', "&quot;");
 }
 
+/**
+ * Strip CSI/OSC ANSI color codes from shell/tool output.
+ * PowerShell Format-Table paints headers/underlines green (`[32;1m----`);
+ * those underlines look like stray green bars in the transcript.
+ * @param {unknown} text
+ * @returns {string}
+ */
+export function stripAnsi(text) {
+  return String(text ?? "")
+    // eslint-disable-next-line no-control-regex
+    .replace(
+      /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g,
+      "",
+    )
+    // stray ESC leftovers
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b/g, "");
+}
+
 /** @param {unknown} v */
 export function prettyJson(v, max = 4000) {
   try {
-    const s = typeof v === "string" ? v : JSON.stringify(v, null, 2);
+    const s = stripAnsi(typeof v === "string" ? v : JSON.stringify(v, null, 2));
     if (s == null) return "";
     return s.length > max ? `${s.slice(0, max)}\n…` : s;
   } catch {
-    return String(v);
+    return stripAnsi(String(v));
   }
 }
 
@@ -87,8 +106,7 @@ export function compactToolTitle(title, kind = "") {
 }
 
 export function shortFailSummary(text, max = 160) {
-  let s = String(text || "")
-    .replace(/\u001b\[[0-9;]*m/g, "")
+  let s = stripAnsi(text || "")
     .replace(/\s+/g, " ")
     .trim();
   if (!s) return "Tool failed";
@@ -541,7 +559,7 @@ export function extractTextSnippets(update) {
     for (const item of content) {
       if (!item || typeof item !== "object") {
         if (typeof item === "string" && item.trim() && !looksLikeUnifiedDiff(item)) {
-          out.push(item);
+          out.push(stripAnsi(item));
         }
         continue;
       }
@@ -553,13 +571,15 @@ export function extractTextSnippets(update) {
       }
       if (it.type === "content" && it.content && typeof it.content === "object") {
         const c = /** @type {Record<string, unknown>} */ (it.content);
-        if (typeof c.text === "string" && !looksLikeUnifiedDiff(c.text)) out.push(c.text);
+        if (typeof c.text === "string" && !looksLikeUnifiedDiff(c.text)) {
+          out.push(stripAnsi(c.text));
+        }
       } else if (typeof it.text === "string" && !looksLikeUnifiedDiff(it.text)) {
-        out.push(it.text);
+        out.push(stripAnsi(it.text));
       }
     }
   } else if (typeof content === "string" && !looksLikeUnifiedDiff(content)) {
-    out.push(content);
+    out.push(stripAnsi(content));
   }
   return out;
 }
@@ -587,7 +607,7 @@ export function renderDiffLines(container, lines) {
   for (const line of slice) {
     const el = document.createElement("div");
     el.className = `diff-line diff-${line.kind === "ctx" ? "ctx" : line.kind}`;
-    el.textContent = line.text;
+    el.textContent = stripAnsi(line.text);
     frag.appendChild(el);
   }
   container.appendChild(frag);
@@ -609,7 +629,7 @@ function detailsSection(label, body, opts = {}) {
   const bodyEl = document.createElement("div");
   bodyEl.className = opts.mono ? "card-section-body mono" : "card-section-body";
   if (typeof body === "string") {
-    bodyEl.textContent = body;
+    bodyEl.textContent = stripAnsi(body);
   } else {
     bodyEl.appendChild(body);
   }
@@ -684,7 +704,7 @@ export function upsertToolCard(existing, update) {
 
   const failed = status === "failed";
   const completed = status === "completed";
-  // Completed/failed: keep body collapsed unless the user already opened a section
+  // Completed/failed: keep body collapsed (one-line chrome + optional expand)
   const quietDone = failed || completed;
   const card = existing || document.createElement("div");
   card.className = `card card-tool status-${status}${quietDone ? " is-quiet" : ""}${failed ? " is-failed-quiet" : ""}`;
@@ -692,9 +712,10 @@ export function upsertToolCard(existing, update) {
   const prevStatus = card.dataset.toolStatus || "";
   card.dataset.toolStatus = status;
 
-  // Preserve open state only when staying in the same terminal status
-  // (running→completed must force-collapse; do not inherit auto-opened sections).
-  const preserveOpen = prevStatus === status;
+  // Quiet cards always force-collapse: shell dumps (Format-Table underlines,
+  // long raw output) must not stay open after complete. While running, keep
+  // user-opened sections across streaming updates only.
+  const preserveOpen = !quietDone && prevStatus === status && prevStatus !== "";
   const wasOpen = new Set(
     preserveOpen
       ? [...card.querySelectorAll("details.card-section[open]")].map(
@@ -772,33 +793,16 @@ export function upsertToolCard(existing, update) {
         }),
       );
     }
-    // tool id only under details for failed cards
-    if (toolCallId) {
-      card.appendChild(
-        detailsSection("tool id", toolCallId, {
-          open: false,
-          mono: true,
-        }),
-      );
-    }
+    // Quiet failed: no tool id spam (id is in dataset for debugging)
     return card;
   }
 
-  // tool id: hide under details when done; show compact while running
-  if (toolCallId) {
-    if (quietDone) {
-      card.appendChild(
-        detailsSection("tool id", toolCallId, {
-          open: wasOpen.has("tool id"),
-          mono: true,
-        }),
-      );
-    } else {
-      const idEl = document.createElement("div");
-      idEl.className = "card-id muted mono";
-      idEl.textContent = toolCallId;
-      card.appendChild(idEl);
-    }
+  // tool id only while running (collapsed cards stay one line)
+  if (toolCallId && !quietDone) {
+    const idEl = document.createElement("div");
+    idEl.className = "card-id muted mono";
+    idEl.textContent = toolCallId;
+    card.appendChild(idEl);
   }
 
   // Diffs — collapsed when completed; open while running so live edits are visible
@@ -873,7 +877,8 @@ export function upsertToolCard(existing, update) {
 
   // rawOutput: show as diff when unified; skip duplicate "raw output" if already have diffs from it
   if (rawOutput != null && rawOutput !== "" && !texts.length && !diffs.length) {
-    const asStr = typeof rawOutput === "string" ? rawOutput : prettyJson(rawOutput);
+    const asStr =
+      typeof rawOutput === "string" ? stripAnsi(rawOutput) : prettyJson(rawOutput);
     if (looksLikeUnifiedDiff(asStr)) {
       const block = buildDiffBlock({
         path: guessPathFromUnified(asStr) || "output",

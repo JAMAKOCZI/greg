@@ -4,6 +4,7 @@ import {
   escapeHtml,
   highlightCode,
   renderMarkdown,
+  isDecorativeOnlyMarkdown,
 } from "../public/markdown.js";
 
 describe("escapeHtml", () => {
@@ -68,6 +69,30 @@ more`;
     const html = renderMarkdown("Use `foo()` here");
     assert.match(html, /md-inline-code/);
     assert.match(html, /foo\(\)/);
+  });
+
+  it("does not render bare thematic breaks as full-width hr bars", () => {
+    const html = renderMarkdown("---\n\n***\n\n____");
+    assert.equal(html.includes("md-hr"), false);
+    assert.equal(html.includes("<hr"), false);
+  });
+
+  it("keeps real content when dashes appear between sections", () => {
+    const html = renderMarkdown("Before\n\n---\n\nAfter");
+    assert.match(html, /Before/);
+    assert.match(html, /After/);
+    assert.equal(html.includes("<hr"), false);
+  });
+});
+
+describe("isDecorativeOnlyMarkdown", () => {
+  it("treats empty and --- only as decorative", () => {
+    assert.equal(isDecorativeOnlyMarkdown(""), true);
+    assert.equal(isDecorativeOnlyMarkdown("  \n  "), true);
+    assert.equal(isDecorativeOnlyMarkdown("---"), true);
+    assert.equal(isDecorativeOnlyMarkdown("---\n***\n"), true);
+    assert.equal(isDecorativeOnlyMarkdown("hello"), false);
+    assert.equal(isDecorativeOnlyMarkdown("---\nhello"), false);
   });
 });
 

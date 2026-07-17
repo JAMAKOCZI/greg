@@ -14,6 +14,7 @@ import {
   mergeToolUpdate,
   shortFailSummary,
   compactToolTitle,
+  stripAnsi,
 } from "../public/cards.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +64,38 @@ describe("compactToolTitle", () => {
 
   it("keeps short normal titles", () => {
     assert.equal(compactToolTitle("read_file", "read"), "read_file");
+  });
+});
+
+describe("stripAnsi", () => {
+  it("removes PowerShell Format-Table green underlines codes", () => {
+    const raw =
+      "\u001b[32;1mName      \u001b[0m\u001b[32;1m Length\u001b[0m\n" +
+      "\u001b[32;1m----      \u001b[0m \u001b[32;1m------\u001b[0m\n" +
+      "_headers      755\n";
+    const plain = stripAnsi(raw);
+    assert.equal(plain.includes("\u001b"), false);
+    assert.equal(plain.includes("[32;1m"), false);
+    assert.match(plain, /Name/);
+    assert.match(plain, /----/);
+    assert.match(plain, /_headers/);
+  });
+
+  it("strips ANSI inside extractTextSnippets", () => {
+    const texts = extractTextSnippets({
+      content: [
+        {
+          type: "content",
+          content: {
+            type: "text",
+            text: "\u001b[32;1m----\u001b[0m\n\u001b[32;1m------\u001b[0m\n",
+          },
+        },
+      ],
+    });
+    assert.equal(texts.length, 1);
+    assert.equal(texts[0].includes("\u001b"), false);
+    assert.match(texts[0], /----/);
   });
 });
 

@@ -35,6 +35,21 @@ export function escapeHtml(s) {
 }
 
 /**
+ * True when markdown is empty or only decorative (`---`, blank lines).
+ * Used to drop hollow agent bubbles that paint as bare horizontal bars.
+ * @param {unknown} md
+ * @returns {boolean}
+ */
+export function isDecorativeOnlyMarkdown(md) {
+  const lines = String(md ?? "")
+    .split(/\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (!lines.length) return true;
+  return lines.every((l) => /^[-*_]{3,}$/.test(l));
+}
+
+/**
  * @param {string} md
  * @param {{ streaming?: boolean }} [opts]
  * @returns {string} HTML
@@ -146,9 +161,11 @@ export function renderMarkdown(md, opts = {}) {
       continue;
     }
 
+    // Bare thematic breaks (`---`, `***`) become full-width <hr> bars in the
+    // chat column — often the only thing between tools and look like empty
+    // horizontal lines. Skip them; blank lines already separate sections.
     if (/^[-*_]{3,}$/.test(trimmed)) {
       flushAll();
-      blocks.push('<hr class="md-hr" />');
       continue;
     }
 

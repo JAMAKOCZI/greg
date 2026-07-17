@@ -3,7 +3,7 @@ import {
   upsertPlanCard,
   mergeToolUpdate,
 } from "./cards.js";
-import { setMarkdownBody } from "./markdown.js";
+import { setMarkdownBody, isDecorativeOnlyMarkdown } from "./markdown.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -617,10 +617,28 @@ function finalizeMarkdownBubble(bubble) {
   if (body) setMarkdownBody(body, raw, { streaming: false });
 }
 
+/**
+ * Hollow agent bubbles (empty / only `---`) keep a full-width border so the
+ * top+bottom edges look like two large horizontal lines in the chat.
+ * @param {HTMLElement|null|undefined} bubble
+ * @returns {boolean} true if removed
+ */
+function discardEmptyAgentBubble(bubble) {
+  if (!bubble) return false;
+  if (!isDecorativeOnlyMarkdown(bubble._rawText)) return false;
+  if (bubble._mdTimer) {
+    clearTimeout(bubble._mdTimer);
+    bubble._mdTimer = null;
+  }
+  bubble.remove();
+  return true;
+}
+
 function appendToLive(st, kind, chunk) {
   // parentNode works for both live DOM and parked DocumentFragment
   // (isConnected is false while parked in a fragment).
   if (kind === "thought") {
+    if (!String(chunk ?? "").trim()) return;
     if (!st.liveThoughtBubble || !st.liveThoughtBubble.parentNode) {
       st.liveThoughtBubble = appendBubble(st, "thought", "", { role: "thinking" });
     }
@@ -630,7 +648,10 @@ function appendToLive(st, kind, chunk) {
       st.liveThoughtBubble.querySelector(".thought-body") || st.liveThoughtBubble;
     body.appendChild(document.createTextNode(chunk));
   } else {
+    // Do not open a new agent card for whitespace / bare `---` alone — that
+    // paints an empty bordered bubble (two thick horizontal lines).
     if (!st.liveAgentBubble || !st.liveAgentBubble.parentNode) {
+      if (isDecorativeOnlyMarkdown(chunk)) return;
       st.liveAgentBubble = appendBubble(st, "agent", "", { role: "greg" });
     }
     appendMarkdownChunk(st.liveAgentBubble, chunk, { streaming: true });
@@ -642,9 +663,14 @@ function resetLive(st) {
   if (!st) return;
   // Finish any in-flight markdown so tool cards appear after final content
   finalizeMarkdownBubble(st.liveAgentBubble);
-  // Keep thinking collapsed after the thought turn ends
-  if (st.liveThoughtBubble && "open" in st.liveThoughtBubble) {
-    st.liveThoughtBubble.open = false;
+  discardEmptyAgentBubble(st.liveAgentBubble);
+  // Drop empty thinking shells; collapse non-empty ones
+  if (st.liveThoughtBubble) {
+    const body =
+      st.liveThoughtBubble.querySelector(".thought-body") || st.liveThoughtBubble;
+    const text = (body.textContent || "").trim();
+    if (!text) st.liveThoughtBubble.remove();
+    else if ("open" in st.liveThoughtBubble) st.liveThoughtBubble.open = false;
   }
   st.liveAgentBubble = null;
   st.liveThoughtBubble = null;
@@ -2650,6 +2676,8 @@ async function sendPrompt() {
     const cancelled = data.result?.stopReason === "cancelled";
     // Final markdown pass (complete fences, no "streaming…" badge)
     finalizeMarkdownBubble(st.liveAgentBubble);
+    discardEmptyAgentBubble(st.liveAgentBubble);
+    st.liveAgentBubble = null;
     if (cancelled) {
       // Always record on this tab's transcript (may be parked)
       appendBubble(st, "system", "Turn cancelled");
@@ -2660,6 +2688,8 @@ async function sendPrompt() {
     }
   } catch (e) {
     finalizeMarkdownBubble(st.liveAgentBubble);
+    discardEmptyAgentBubble(st.liveAgentBubble);
+    st.liveAgentBubble = null;
     appendBubble(st, "system", e.message);
     if (st.tabId === activeTabId) setStatus("error", "Error");
   } finally {

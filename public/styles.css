@@ -1625,13 +1625,18 @@ body.files-open .main-body {
   font-size: 0.9em;
 }
 
+/* Session / stderr / status notes — text only, no box (dashed border
+   used to read as empty horizontal lines between tools). */
 .bubble.system {
   align-self: center;
   background: transparent;
-  border-style: dashed;
+  border: none;
+  box-shadow: none;
   color: var(--muted);
   font-size: 12px;
   max-width: min(640px, 100%);
+  padding: 2px 8px;
+  text-align: center;
 }
 
 .bubble.tool {
@@ -2339,6 +2344,11 @@ body.files-open .main-body {
   border: 1px solid #25252f;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.2);
+}
+
+/* Belt-and-suspenders: never paint shell walls when collapsed */
+.card-section:not([open]) > .card-section-body {
+  display: none !important;
 }
 
 .card-section > summary {
