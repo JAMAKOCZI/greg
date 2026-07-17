@@ -400,9 +400,17 @@ Store under **`~/.greg/sessions/<id>.json`** (Greg-owned). Do **not** depend on 
 
 **Only if** Phase 2 is solid and user still wants upstream history.
 
-- Spike: document format stability
-- Read-only importer → convert to Greg transcript format
-- Never write back into `~/.grok/` from Greg
+- [x] Spike: document format stability (`docs/architecture.md` — chat_format_version 1, defensive parse)
+- [x] Read-only importer → convert to Greg transcript format (`lib/grok-sessions.mjs`)
+- [x] API: `GET/POST /api/import/grok` + UI modal **Import Grok**
+- [x] Never write back into `~/.grok/` from Greg (`GREG_GROK_SESSIONS_DIR` override read root only)
+
+### Phase 7 exit criteria
+
+- [x] List Grok sessions without mutating `~/.grok`
+- [x] Import produces a Greg transcript openable via history + resume
+- [x] Unit tests with fixture tree under temp dir
+- [x] Architecture + progress log updated
 
 ---
 
@@ -459,6 +467,7 @@ Phase 5 can swap with 3–4 only if real ACP bugs block daily use — note the s
 | 2026-07-16 | **6 complete** | `lib/fs-browse` + `/api/fs/tree|file` + Files panel; path containment + symlink escape; v0.8.0 |
 | 2026-07-16 | **6 review fixes** | ~ root expand, fsBrowseHttpStatus, O_NOFOLLOW+re-realpath, omit escape symlinks, depth cap 3, UI session sync + lazy depth 0 + expand retry |
 | 2026-07-16 | **audit bugfix** | resolveGrokBin (relative mock), ensure no-overwrite, merge sparse content, bubble resetLive, hydrate history, stop/SIGKILL, wireBridge stale, busy 409, flush on tools |
+| 2026-07-17 | **7 complete** | Read-only import `~/.grok/sessions` → Greg transcripts; API + Import Grok modal; never write upstream; v0.9.0 |
 
 ---
 

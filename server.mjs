@@ -43,6 +43,12 @@ import {
   applyContextSeed,
   buildResumeContextSeed,
 } from "./lib/resume-context.mjs";
+import {
+  defaultGrokSessionsDir,
+  grokSessionToTranscript,
+  listGrokSessions,
+  loadGrokSession,
+} from "./lib/grok-sessions.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
@@ -52,6 +58,8 @@ const GROK_BIN = resolveGrokBin(process.env.GROK_BIN || "grok");
 const SESSIONS_DIR = process.env.GREG_SESSIONS_DIR || defaultSessionsDir();
 const RECENTS_PATH = process.env.GREG_RECENTS_PATH || defaultRecentsPath();
 const SETTINGS_PATH = process.env.GREG_SETTINGS_PATH || defaultSettingsPath();
+const GROK_SESSIONS_DIR =
+  process.env.GREG_GROK_SESSIONS_DIR || defaultGrokSessionsDir();
 
 const tabs = new TabRegistry();
 const transcripts = new TranscriptStore({ rootDir: SESSIONS_DIR });
@@ -331,6 +339,94 @@ const server = createGregServer({
       try {
         const list = await transcripts.list();
         json(res, 200, { sessions: list });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    // Phase 7: read-only import from ~/.grok/sessions (never writes there)
+    if (url.pathname === "/api/import/grok" && req.method === "GET") {
+      try {
+        const limitRaw = Number(url.searchParams.get("limit"));
+        const list = await listGrokSessions({
+          rootDir: GROK_SESSIONS_DIR,
+          limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
+        });
+        // Mark which ones already exist in Greg
+        const gregList = await transcripts.list();
+        const gregIds = new Set(gregList.map((s) => s.id));
+        const importedSourceIds = new Set(
+          gregList
+            .filter((s) => s.source === "grok" && s.sourceSessionId)
+            .map((s) => s.sourceSessionId),
+        );
+        json(res, 200, {
+          rootDir: GROK_SESSIONS_DIR,
+          sessions: list.map((s) => ({
+            ...s,
+            imported:
+              gregIds.has(s.id) || importedSourceIds.has(s.id),
+          })),
+        });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    if (url.pathname === "/api/import/grok" && req.method === "POST") {
+      try {
+        const body = await readJson(req);
+        const id = typeof body.id === "string" ? body.id.trim() : "";
+        if (!id) {
+          json(res, 400, { error: "Missing id", code: "MISSING_ID" });
+          return true;
+        }
+        const force = body.force === true;
+        const existing = await transcripts.load(id);
+        if (existing && !force) {
+          json(res, 409, {
+            error: "Already imported (same id in Greg history)",
+            code: "ALREADY_IMPORTED",
+            id,
+            title: existing.title,
+          });
+          return true;
+        }
+        if (existing && tabs.has(id)) {
+          json(res, 409, {
+            error: "Session is live — stop it before re-importing",
+            code: "LIVE",
+          });
+          return true;
+        }
+
+        const loaded = await loadGrokSession(id, {
+          rootDir: GROK_SESSIONS_DIR,
+        });
+        if (!loaded) {
+          json(res, 404, {
+            error: "Grok session not found",
+            code: "NOT_FOUND",
+            hint: `Looked under ${GROK_SESSIONS_DIR}`,
+          });
+          return true;
+        }
+
+        const doc = grokSessionToTranscript(loaded.summary, loaded.items, {
+          id,
+        });
+        await transcripts.save(doc);
+        json(res, 200, {
+          ok: true,
+          id: doc.id,
+          title: doc.title,
+          cwd: doc.cwd,
+          messageCount: doc.messages.length,
+          source: doc.source,
+          overwritten: Boolean(existing),
+        });
       } catch (err) {
         json(res, 500, { error: err.message || String(err) });
       }

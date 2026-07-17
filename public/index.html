@@ -51,7 +51,17 @@
         </div>
 
         <div class="sidebar-section chats-section">
-          <div class="section-label">Tasks</div>
+          <div class="section-label-row">
+            <div class="section-label">Tasks</div>
+            <button
+              type="button"
+              id="btn-import-grok"
+              class="btn subtle section-action"
+              title="Import chats from Grok Build (~/.grok/sessions)"
+            >
+              Import Grok
+            </button>
+          </div>
           <div id="chat-list" class="chat-list" aria-label="Conversations" aria-live="polite">
             <div id="session-list" class="session-list" aria-label="Active sessions"></div>
             <div id="history-divider" class="chat-divider" hidden>Earlier</div>
@@ -239,6 +249,26 @@
           </div>
         </footer>
       </main>
+    </div>
+
+    <!-- Import Grok Build sessions (read-only from ~/.grok/sessions) -->
+    <div id="import-grok" class="folder-picker import-grok" hidden role="dialog" aria-modal="true" aria-labelledby="import-grok-title">
+      <div class="folder-picker-backdrop" id="import-grok-backdrop"></div>
+      <div class="folder-picker-panel import-grok-panel">
+        <header class="folder-picker-head">
+          <h2 id="import-grok-title" class="folder-picker-title">Import from Grok Build</h2>
+          <button type="button" id="import-grok-close" class="btn icon subtle" aria-label="Close">✕</button>
+        </header>
+        <p class="import-grok-hint muted small">
+          Read-only copy into Greg history. Never writes to <code>~/.grok</code>.
+        </p>
+        <div id="import-grok-list" class="import-grok-list" role="listbox" aria-label="Grok sessions"></div>
+        <p id="import-grok-status" class="folder-picker-status muted small"></p>
+        <footer class="folder-picker-foot">
+          <button type="button" id="import-grok-refresh" class="btn subtle">Refresh</button>
+          <button type="button" id="import-grok-done" class="btn primary">Done</button>
+        </footer>
+      </div>
     </div>
 
     <!-- Workspace folder picker -->

@@ -57,6 +57,14 @@ const els = {
   filesPreview: $("files-preview"),
   filesPreviewPath: $("files-preview-path"),
   filesPreviewMeta: $("files-preview-meta"),
+  btnImportGrok: $("btn-import-grok"),
+  importGrok: $("import-grok"),
+  importGrokBackdrop: $("import-grok-backdrop"),
+  importGrokClose: $("import-grok-close"),
+  importGrokList: $("import-grok-list"),
+  importGrokStatus: $("import-grok-status"),
+  importGrokRefresh: $("import-grok-refresh"),
+  importGrokDone: $("import-grok-done"),
 };
 
 /** When set, main pane is a read-only history replay (not a live tab). */
@@ -2283,6 +2291,13 @@ function renderHistoryList() {
     const titleEl = document.createElement("span");
     titleEl.className = "chat-title";
     titleEl.textContent = title;
+    if (item.source === "grok") {
+      const tag = document.createElement("span");
+      tag.className = "chat-source-tag";
+      tag.textContent = "· grok";
+      tag.title = "Imported from Grok Build";
+      titleEl.appendChild(tag);
+    }
     body.appendChild(titleEl);
     if (item.cwdBase) {
       const sub = document.createElement("span");
@@ -2870,6 +2885,152 @@ if (els.btnFilesClose) {
 if (els.btnFilesRefresh) {
   els.btnFilesRefresh.addEventListener("click", () => {
     if (filesPanelOpen) void refreshFilesTree();
+  });
+}
+
+// ── Import Grok Build sessions (Phase 7) ─────────────────────────────
+
+function openImportGrok() {
+  if (!els.importGrok) return;
+  els.importGrok.hidden = false;
+  void loadImportGrokList();
+}
+
+function closeImportGrok() {
+  if (!els.importGrok) return;
+  els.importGrok.hidden = true;
+}
+
+async function loadImportGrokList() {
+  if (!els.importGrokList) return;
+  els.importGrokList.innerHTML = "";
+  if (els.importGrokStatus) {
+    els.importGrokStatus.textContent = "Loading Grok sessions…";
+  }
+  try {
+    const data = await api("/api/import/grok?limit=80");
+    const sessions = data.sessions || [];
+    if (els.importGrokStatus) {
+      els.importGrokStatus.textContent = sessions.length
+        ? `${sessions.length} session${sessions.length === 1 ? "" : "s"} under ${data.rootDir || "~/.grok/sessions"}`
+        : `No sessions found under ${data.rootDir || "~/.grok/sessions"}`;
+    }
+    for (const s of sessions) {
+      const row = document.createElement("div");
+      row.className = "import-grok-row";
+      row.setAttribute("role", "option");
+
+      const body = document.createElement("div");
+      body.className = "import-grok-body";
+      const title = document.createElement("div");
+      title.className = "import-grok-title";
+      title.textContent = s.title || s.cwdBase || s.id;
+      title.title = s.id;
+      const sub = document.createElement("div");
+      sub.className = "import-grok-sub";
+      const when = s.updatedAt
+        ? new Date(s.updatedAt).toLocaleString()
+        : "";
+      sub.textContent = [s.cwdBase || s.cwd, when, s.model, s.kind]
+        .filter(Boolean)
+        .join(" · ");
+      body.appendChild(title);
+      body.appendChild(sub);
+
+      if (s.imported) {
+        const badge = document.createElement("span");
+        badge.className = "import-grok-badge in";
+        badge.textContent = "in Greg";
+        row.appendChild(body);
+        row.appendChild(badge);
+        const openBtn = document.createElement("button");
+        openBtn.type = "button";
+        openBtn.className = "btn subtle";
+        openBtn.textContent = "Open";
+        openBtn.addEventListener("click", () => {
+          closeImportGrok();
+          void openHistory(s.id);
+        });
+        row.appendChild(openBtn);
+      } else {
+        row.appendChild(body);
+        const imp = document.createElement("button");
+        imp.type = "button";
+        imp.className = "btn primary";
+        imp.textContent = "Import";
+        imp.addEventListener("click", () => {
+          void importGrokSession(s.id, imp, row);
+        });
+        row.appendChild(imp);
+      }
+      els.importGrokList.appendChild(row);
+    }
+  } catch (e) {
+    if (els.importGrokStatus) {
+      els.importGrokStatus.textContent = e.message || "Failed to list Grok sessions";
+    }
+  }
+}
+
+/**
+ * @param {string} id
+ * @param {HTMLButtonElement} btn
+ * @param {HTMLElement} row
+ */
+async function importGrokSession(id, btn, row) {
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = "…";
+  try {
+    const data = await api("/api/import/grok", {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    });
+    await refreshHistory();
+    // Refresh row to "in Greg"
+    const badge = document.createElement("span");
+    badge.className = "import-grok-badge in";
+    badge.textContent = "in Greg";
+    btn.replaceWith(badge);
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.className = "btn subtle";
+    openBtn.textContent = "Open";
+    openBtn.addEventListener("click", () => {
+      closeImportGrok();
+      void openHistory(data.id || id);
+    });
+    row.appendChild(openBtn);
+    if (els.importGrokStatus) {
+      els.importGrokStatus.textContent = `Imported “${data.title || id}” (${data.messageCount ?? "?"} messages)`;
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = prev;
+    if (e.data?.code === "ALREADY_IMPORTED") {
+      await refreshHistory();
+      void loadImportGrokList();
+      return;
+    }
+    alert(e.message || "Import failed");
+  }
+}
+
+if (els.btnImportGrok) {
+  els.btnImportGrok.addEventListener("click", () => openImportGrok());
+}
+if (els.importGrokClose) {
+  els.importGrokClose.addEventListener("click", () => closeImportGrok());
+}
+if (els.importGrokDone) {
+  els.importGrokDone.addEventListener("click", () => closeImportGrok());
+}
+if (els.importGrokBackdrop) {
+  els.importGrokBackdrop.addEventListener("click", () => closeImportGrok());
+}
+if (els.importGrokRefresh) {
+  els.importGrokRefresh.addEventListener("click", () => {
+    void loadImportGrokList();
   });
 }
 

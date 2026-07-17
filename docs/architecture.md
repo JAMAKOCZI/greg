@@ -122,6 +122,23 @@ Response fields on `session/new`: `contextSeeded`, `contextSeed: { messageCount,
 
 Atomic writes: temp file + rename via `lib/transcript-store.mjs`.
 
+## Import Grok Build sessions (Phase 7)
+
+Optional bridge so CLI/TUI history is usable inside Greg:
+
+| Path | Role |
+|------|------|
+| `~/.grok/sessions/<url-encoded-cwd>/<uuid>/summary.json` | Index metadata (title, cwd, timestamps) |
+| `…/chat_history.jsonl` | Conversation lines (`user` / `assistant` / `reasoning` / `tool_result` / …) |
+
+- **Read-only** — Greg never writes under `~/.grok` (override scan root with `GREG_GROK_SESSIONS_DIR`)
+- Format is **upstream-unstable** (`chat_format_version: 1` observed); parse defensively
+- `GET /api/import/grok` — list recent Grok sessions (+ `imported` flag if already in Greg)
+- `POST /api/import/grok` `{ id, force? }` — convert → `~/.greg/sessions/<id>.json` with `source: { kind: "grok", … }`
+- Mapping: skip system prompts + synthetic user reminders; `assistant` → agent (+ tool stubs); `reasoning` → thought (capped); `tool_result` → tool (capped)
+- UI: **Import Grok** in the Tasks sidebar → modal list → Import / Open (then same resume path as Greg history)
+- Re-import without `force` → `409 ALREADY_IMPORTED`
+
 ## Cancel (v0.3)
 
 Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests):
@@ -145,7 +162,7 @@ Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests
 - [x] Quality foundation (tests + mock agent + tab registry)
 - [x] Cancel / interrupt in-flight turn
 - [x] Durable transcripts under `~/.greg/sessions` (Greg-owned)
-- [ ] Multi-tab session history from `~/.grok/sessions` (optional import later)
+- [x] Optional import of `~/.grok/sessions` into Greg history (Phase 7; read-only)
 - [x] Manual vs auto-approve permission cards (wired end-to-end)
 - [x] Project sidebar + workspace recents (validated path + MRU)
 - [x] ACP tool/diff/plan card hardening (fixtures under `test/fixtures/acp/`)

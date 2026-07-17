@@ -318,6 +318,105 @@ body {
   color: var(--text);
 }
 
+.section-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.section-label-row .section-label {
+  margin-bottom: 0;
+}
+
+.section-action {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 3px 8px;
+  opacity: 0.9;
+}
+
+.import-grok-panel {
+  grid-template-rows: auto auto 1fr auto auto;
+  width: min(520px, 100%);
+}
+
+.import-grok-hint {
+  margin: 0;
+  padding: 8px 14px 4px;
+  line-height: 1.4;
+}
+
+.import-grok-hint code {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.import-grok-list {
+  overflow: auto;
+  padding: 8px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 160px;
+  max-height: min(52vh, 420px);
+}
+
+.import-grok-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.import-grok-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.import-grok-title {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-grok-sub {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-grok-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.import-grok-badge.in {
+  color: var(--accent, #ff6a00);
+  border-color: color-mix(in srgb, var(--accent, #ff6a00) 40%, transparent);
+}
+
+.chat-source-tag {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+
 /* Folder picker modal */
 .folder-picker {
   position: fixed;
