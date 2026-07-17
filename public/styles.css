@@ -2311,6 +2311,7 @@ body.files-open .main-body {
 /* Quiet completed/failed tools: compact chrome */
 .card-tool.is-quiet {
   padding: 10px 12px;
+  opacity: 0.95;
 }
 
 /* Quiet failed tools: one-line summary, no wall of error text */
