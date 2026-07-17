@@ -103,7 +103,7 @@ Greg-owned history (not `~/.grok/sessions`):
 - Created on `POST /api/session/new` with `id = tabId`
 - Messages appended on user prompts; agent/thought text flushed at turn end; tools upserted by id; plans replaced in place
 - API: `GET /api/history`, `GET /api/history/:id`, `DELETE /api/history/:id` (409 if session still live)
-- UI: sidebar **History** — read-only replay (composer disabled); delete requires confirm
+- UI: **Tasks / Earlier** — open a saved chat **auto-resumes** the agent (`session/new` with same `tabId` + `resume: true`, same transcript file). Composer enabled. Read-only only if resume fails.
 - Integrity: per-id write locks, 0o700 dir / 0o600 files, fsync before rename, await flush on SIGINT/SIGTERM
 
 Atomic writes: temp file + rename via `lib/transcript-store.mjs`.

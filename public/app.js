@@ -1963,68 +1963,153 @@ function switchToTab(tabId) {
 }
 
 /**
- * Open a saved transcript as read-only replay (composer disabled).
+ * Open a saved chat and auto-resume the agent in the same workspace.
+ * Reuses the transcript id so new messages append to the same history file.
+ * Falls back to read-only view only if the agent fails to start.
  * @param {string} id
  */
 async function openHistory(id) {
   const gen = ++historyLoadGen;
 
-  // Park live tab transcript if any
+  // Already live under this id → just switch
+  const live = tabStates.get(id);
+  if (live?.alive) {
+    historyViewId = null;
+    switchToTab(id);
+    closeSidebar();
+    return;
+  }
+
+  // Park current live tab (if any)
   const prev = activeState();
   if (prev && !historyViewId) {
     prev.draft = els.prompt.value;
     parkActiveTranscript(prev);
   }
 
-  historyViewId = id;
-  activeTabId = null;
+  historyViewId = null;
+  closeSidebar();
+  setStatus("busy", "Resuming…");
+  setComposerEnabled(false);
+  setStopEnabled(false);
 
   for (const child of [...els.transcript.children]) {
     if (child !== els.emptyState) child.remove();
   }
   els.transcript.classList.remove("has-messages");
   els.prompt.value = "";
-  setStopEnabled(false);
-  setComposerEnabled(false);
-  setStatus("idle", "History");
-  els.hint.textContent = "Read-only replay · New session to continue working";
-  renderSessionList();
-  renderHistoryList();
-  closeSidebar();
-  // Active session unbound — refresh files against cwd field / history cwd when known
-  syncFilesPanelToWorkspace({ force: true });
 
+  /** @type {object|null} */
+  let doc = null;
   try {
-    const doc = await api(`/api/history/${encodeURIComponent(id)}`);
-    // Stale response after a newer click
-    if (gen !== historyLoadGen || historyViewId !== id) return;
-
-    els.sessionLabel.textContent = doc.title
-      ? `history · ${doc.title}`
-      : `history · ${shortId(id)}`;
-    if (doc.cwd) setWorkspacePath(doc.cwd);
-    syncFilesPanelToWorkspace();
-
-    for (const child of [...els.transcript.children]) {
-      if (child !== els.emptyState) child.remove();
-    }
-
-    renderHistoryMessage({
-      role: "system",
-      text: `Replay · ${doc.cwd || "—"}${doc.messages?.length ? ` · ${doc.messages.length} messages` : ""}`,
-    });
-    for (const m of doc.messages || []) {
-      renderHistoryMessage(m);
-    }
-    markTranscriptFilled();
-    scrollTranscript();
+    doc = await api(`/api/history/${encodeURIComponent(id)}`);
   } catch (e) {
-    if (gen !== historyLoadGen || historyViewId !== id) return;
+    if (gen !== historyLoadGen) return;
+    setStatus("error", "Failed");
     const div = document.createElement("div");
     div.className = "bubble system";
-    div.textContent = `Failed to load history: ${e.message}`;
+    div.textContent = `Failed to load chat: ${e.message}`;
     els.transcript.appendChild(div);
     markTranscriptFilled();
+    return;
+  }
+  if (gen !== historyLoadGen) return;
+
+  if (doc.cwd) setWorkspacePath(doc.cwd);
+  syncFilesPanelToWorkspace({ force: true });
+
+  // Paint prior messages while the agent starts
+  for (const child of [...els.transcript.children]) {
+    if (child !== els.emptyState) child.remove();
+  }
+  for (const m of doc.messages || []) {
+    renderHistoryMessage(m);
+  }
+  markTranscriptFilled();
+  scrollTranscript();
+
+  await flushSettingsSave();
+  if (creatingSession) return;
+  creatingSession = true;
+  if (els.btnNew) els.btnNew.disabled = true;
+
+  try {
+    const data = await api("/api/session/new", {
+      method: "POST",
+      body: JSON.stringify({
+        tabId: id,
+        cwd: doc.cwd || els.cwd?.value || undefined,
+        title: doc.title || null,
+        resume: true,
+        alwaysApprove: els.alwaysApprove?.checked === true,
+        ...sessionModelEffortFromUi(),
+      }),
+    });
+    if (gen !== historyLoadGen) return;
+
+    const st = ensureTabState({
+      tabId: data.tabId,
+      sessionId: data.sessionId,
+      cwd: data.cwd || doc.cwd || "",
+      title: data.title || doc.title || null,
+      alive: true,
+      createdAt: data.createdAt || doc.createdAt,
+      lastActiveAt: data.lastActiveAt || Date.now(),
+    });
+    st.draft = "";
+    st.park = null;
+    resetLive(st);
+
+    // Keep painted history in the live transcript (already on screen)
+    activeTabId = st.tabId;
+    historyViewId = null;
+
+    appendBubble(
+      st,
+      "system",
+      `Resumed · ${data.cwd || doc.cwd || "—"}${
+        doc.messages?.length ? ` · ${doc.messages.length} earlier messages` : ""
+      }`,
+    );
+
+    if (data.cwd) setWorkspacePath(data.cwd, { openFiles: false });
+    connectStream(st);
+    updateSessionLabel(st);
+    setStatus("ready", "Ready");
+    setComposerEnabled(true);
+    setStopEnabled(true);
+    renderSessionList();
+    renderHistoryList();
+    void refreshHistory();
+    void refreshRecents();
+    syncFilesPanelToWorkspace();
+    els.prompt.focus();
+  } catch (e) {
+    if (gen !== historyLoadGen) return;
+    // Fallback: view transcript only if agent cannot start
+    historyViewId = id;
+    activeTabId = null;
+    setStatus("error", "View only");
+    setComposerEnabled(false);
+    setStopEnabled(false);
+    els.sessionLabel.textContent = doc.title
+      ? `${doc.title} · offline`
+      : `chat · ${shortId(id)}`;
+    els.hint.textContent =
+      "Could not resume agent — transcript only. Fix grok / try New task.";
+    const div = document.createElement("div");
+    div.className = "bubble system";
+    div.textContent = `Resume failed: ${e.message}${
+      e.data?.hint ? ` — ${e.data.hint}` : ""
+    }. Showing saved transcript only.`;
+    els.transcript.appendChild(div);
+    markTranscriptFilled();
+    scrollTranscript();
+    renderSessionList();
+    renderHistoryList();
+  } finally {
+    creatingSession = false;
+    if (els.btnNew) els.btnNew.disabled = false;
   }
 }
 

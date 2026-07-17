@@ -449,6 +449,7 @@ const server = createGregServer({
       entry.thoughtBuffer = "";
       wireBridge(tabId, entry);
 
+      const resume = body.resume === true;
       try {
         const result = await bridge.openSession({ cwd });
         tabs.touch(tabId);
@@ -457,7 +458,13 @@ const server = createGregServer({
             cwd,
             title: entry.title,
             createdAt: entry.createdAt,
-            restarted: Boolean(existing),
+            // Replacing a live tab, or resuming a saved chat under the same id
+            restarted: Boolean(existing) || resume,
+            restartNote: resume
+              ? "Session resumed — continue in this chat"
+              : existing
+                ? "Session restarted"
+                : undefined,
           });
         } catch (persistErr) {
           console.error("[greg] transcript create failed", persistErr);
@@ -474,6 +481,7 @@ const server = createGregServer({
           title: entry.title,
           createdAt: entry.createdAt,
           lastActiveAt: entry.lastActiveAt,
+          resumed: resume,
           result,
         });
       } catch (err) {
@@ -687,10 +695,25 @@ async function ensureTranscript(tabId, opts) {
   if (opts.restarted && existingBefore) {
     await transcripts.appendMessage(tabId, {
       role: "system",
-      text: "Session restarted",
+      text:
+        typeof opts.restartNote === "string" && opts.restartNote.trim()
+          ? opts.restartNote.trim()
+          : "Session restarted",
     });
   }
   if (opts.title) await transcripts.setTitle(tabId, opts.title);
+  // Keep cwd fresh on resume into same transcript id
+  if (existingBefore && opts.cwd && existingBefore.cwd !== opts.cwd) {
+    try {
+      const full = await transcripts.load(tabId);
+      if (full) {
+        full.cwd = opts.cwd;
+        await transcripts.save(full);
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }
   return doc;
 }
 
