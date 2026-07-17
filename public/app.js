@@ -501,6 +501,48 @@ function syncTranscriptEmptyClass(host = els.transcript) {
   }
 }
 
+/** Remove all transcript children except the empty-state placeholder. */
+function clearTranscriptMessages() {
+  if (!els.transcript) return;
+  for (const child of [...els.transcript.children]) {
+    if (child !== els.emptyState) child.remove();
+  }
+  els.transcript.classList.remove("has-messages");
+}
+
+/**
+ * Hide transcript while swapping chats so active+history never stack for a frame.
+ * @param {{ clear?: boolean }} [opts] clear — also drop live nodes (default true)
+ */
+function beginTranscriptSwap(opts = {}) {
+  if (!els.transcript) return;
+  els.transcript.classList.add("is-swapping");
+  els.transcript.setAttribute("aria-busy", "true");
+  if (opts.clear !== false) clearTranscriptMessages();
+}
+
+function endTranscriptSwap() {
+  if (!els.transcript) return;
+  els.transcript.classList.remove("is-swapping");
+  els.transcript.removeAttribute("aria-busy");
+}
+
+/**
+ * Build messages off-DOM, then replace transcript in one append (no partial paint).
+ * @param {Array<{ role?: string, text?: string, meta?: object }>} messages
+ */
+function paintHistoryMessages(messages) {
+  const frag = document.createDocumentFragment();
+  for (const m of messages || []) {
+    renderHistoryMessage(m, frag);
+  }
+  clearTranscriptMessages();
+  els.transcript.appendChild(frag);
+  if ((messages || []).length) markTranscriptFilled();
+  else syncTranscriptEmptyClass();
+  scrollTranscript({ force: true });
+}
+
 /**
  * Pin transcript to latest only while the user is already near the bottom.
  * Scrolling up detaches; scrolling back to the end re-attaches.
@@ -714,17 +756,15 @@ function parkActiveTranscript(st) {
     if (child === els.emptyState) continue;
     frag.appendChild(child);
   }
+  // Replace park wholesale — never merge with a leftover fragment (that
+  // stacked two chats when switching active ↔ earlier).
   st.park = frag;
-  // live bubbles remain connected inside park
   els.transcript.classList.remove("has-messages");
 }
 
 /** Restore parked messages into the live transcript. */
 function restoreTranscript(st) {
-  // Clear current messages (keep empty-state)
-  for (const child of [...els.transcript.children]) {
-    if (child !== els.emptyState) child.remove();
-  }
+  clearTranscriptMessages();
   if (st?.park) {
     els.transcript.appendChild(st.park);
     st.park = null;
@@ -2123,19 +2163,20 @@ function switchToTab(tabId) {
   // Leaving history replay
   historyViewId = null;
 
+  // Hide first (keep nodes so we can park), then swap, then show once
+  beginTranscriptSwap({ clear: false });
   const prev = activeState();
   if (prev && activeTabId) {
     prev.draft = els.prompt.value;
     parkActiveTranscript(prev);
   } else {
-    // Clear replay messages from transcript
-    for (const child of [...els.transcript.children]) {
-      if (child !== els.emptyState) child.remove();
-    }
+    clearTranscriptMessages();
   }
 
   activeTabId = tabId;
   restoreTranscript(next);
+  endTranscriptSwap();
+
   els.prompt.value = next.draft || "";
   if (next.cwd) setWorkspacePath(next.cwd);
 
@@ -2169,56 +2210,68 @@ async function openHistory(id) {
   if (live?.alive) {
     historyViewId = null;
     await stopAllLiveSessions(id);
+    if (gen !== historyLoadGen) return;
     switchToTab(id);
     closeSidebar();
     return;
   }
 
-  // Single-session: stop current live agent before resuming history
-  await stopAllLiveSessions(null);
-
+  // Hide + drop active chat immediately so it cannot stack under history paint
+  // during await stop / fetch (was a one-frame double transcript flash).
+  beginTranscriptSwap({ clear: true });
+  activeTabId = null;
   historyViewId = null;
   closeSidebar();
   setStatus("busy", "Resuming…");
   setComposerEnabled(false);
   setStopEnabled(false);
-
-  for (const child of [...els.transcript.children]) {
-    if (child !== els.emptyState) child.remove();
-  }
-  els.transcript.classList.remove("has-messages");
   els.prompt.value = "";
+  renderSessionList();
+
+  // Single-session: stop current live agent before resuming history
+  try {
+    await stopAllLiveSessions(null);
+  } catch {
+    /* still try to load history */
+  }
+  if (gen !== historyLoadGen) {
+    endTranscriptSwap();
+    return;
+  }
 
   /** @type {object|null} */
   let doc = null;
   try {
     doc = await api(`/api/history/${encodeURIComponent(id)}`);
   } catch (e) {
-    if (gen !== historyLoadGen) return;
+    if (gen !== historyLoadGen) {
+      endTranscriptSwap();
+      return;
+    }
     setStatus("error", "Failed");
+    clearTranscriptMessages();
     const div = document.createElement("div");
     div.className = "bubble system";
     div.textContent = `Failed to load chat: ${e.message}`;
     els.transcript.appendChild(div);
     markTranscriptFilled();
+    endTranscriptSwap();
     return;
   }
-  if (gen !== historyLoadGen) return;
+  if (gen !== historyLoadGen) {
+    endTranscriptSwap();
+    return;
+  }
 
   if (doc.cwd) setWorkspacePath(doc.cwd);
   syncFilesPanelToWorkspace({ force: true });
 
-  // Paint prior messages while the agent starts
-  for (const child of [...els.transcript.children]) {
-    if (child !== els.emptyState) child.remove();
-  }
-  for (const m of doc.messages || []) {
-    renderHistoryMessage(m);
-  }
-  markTranscriptFilled();
-  scrollTranscript({ force: true });
+  // One atomic paint, then reveal (never active+history together)
+  paintHistoryMessages(doc.messages || []);
+  endTranscriptSwap();
 
   await flushSettingsSave();
+  if (gen !== historyLoadGen) return;
   if (creatingSession) return;
   creatingSession = true;
   if (els.btnNew) els.btnNew.disabled = true;
@@ -2299,6 +2352,7 @@ async function openHistory(id) {
       : `chat · ${shortId(id)}`;
     els.hint.textContent =
       "Could not resume agent — transcript only. Fix grok / try New task.";
+    // History is already painted — only add the error note
     const div = document.createElement("div");
     div.className = "bubble system";
     div.textContent = `Resume failed: ${e.message}${
@@ -2445,25 +2499,18 @@ async function loadTabTranscript(st) {
     const doc = await api(`/api/history/${encodeURIComponent(st.tabId)}`);
     const messages = doc.messages || [];
     if (!messages.length) return;
-    const host =
-      st.tabId === activeTabId && !historyViewId
-        ? els.transcript
-        : (st.park ||= document.createDocumentFragment());
-    if (host === els.transcript) {
-      for (const child of [...els.transcript.children]) {
-        if (child !== els.emptyState) child.remove();
-      }
-    } else if (st.park) {
-      // park may already hold SSE-era nodes; prepend history only if empty
-      if (st.park.childNodes.length > 0) return;
+    const toLive = st.tabId === activeTabId && !historyViewId;
+    if (toLive) {
+      paintHistoryMessages(messages);
+      return;
     }
+    // Parked tab: only seed park when empty (never append onto live SSE nodes)
+    if (st.park && st.park.childNodes.length > 0) return;
+    const frag = document.createDocumentFragment();
     for (const m of messages) {
-      renderHistoryMessage(m, host);
+      renderHistoryMessage(m, frag);
     }
-    if (host === els.transcript) {
-      markTranscriptFilled();
-      scrollTranscript({ force: true });
-    }
+    st.park = frag;
   } catch {
     /* history optional for live tabs */
   }

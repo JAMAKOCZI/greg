@@ -1295,6 +1295,13 @@ body.files-open .main-body {
   min-height: 0;
 }
 
+/* Chat switch (active ↔ earlier): hide until the next transcript is ready
+   so old+new messages never stack for a paint frame. */
+.transcript.is-swapping {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .empty-state {
   margin: auto;
   text-align: center;
