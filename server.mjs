@@ -39,6 +39,10 @@ import {
   fsBrowseHttpStatus,
 } from "./lib/fs-browse.mjs";
 import { listAvailableModels, normalizeEffort } from "./lib/models.mjs";
+import {
+  applyContextSeed,
+  buildResumeContextSeed,
+} from "./lib/resume-context.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
@@ -469,6 +473,28 @@ const server = createGregServer({
         } catch (persistErr) {
           console.error("[greg] transcript create failed", persistErr);
         }
+
+        // Fresh ACP session has empty model context — seed from Greg transcript
+        // for resume / tab restart so the first real prompt continues the chat.
+        /** @type {{ messageCount: number, charCount: number, truncated: boolean } | null} */
+        let contextSeedMeta = null;
+        if (resume || existing) {
+          try {
+            const doc = await transcripts.load(tabId);
+            const built = buildResumeContextSeed(doc?.messages || []);
+            if (built?.text) {
+              entry.contextSeed = built.text;
+              contextSeedMeta = {
+                messageCount: built.messageCount,
+                charCount: built.charCount,
+                truncated: built.truncated,
+              };
+            }
+          } catch (seedErr) {
+            console.error("[greg] resume context seed failed", seedErr);
+          }
+        }
+
         try {
           await recents.touch(cwd, { skipValidate: true });
         } catch (recErr) {
@@ -482,6 +508,8 @@ const server = createGregServer({
           createdAt: entry.createdAt,
           lastActiveAt: entry.lastActiveAt,
           resumed: resume,
+          contextSeeded: Boolean(contextSeedMeta),
+          contextSeed: contextSeedMeta,
           result,
         });
       } catch (err) {
@@ -536,14 +564,23 @@ const server = createGregServer({
       tabs.ensureTitleFromPrompt(body.tabId, text);
       const title = entry.title;
       try {
+        // Persist only the real user text — never the context seed preamble
         await persistMessage(body.tabId, entry, { role: "user", text }, { title });
       } catch (persistErr) {
         console.error("[greg] transcript user append failed", persistErr);
       }
 
+      // One-shot: attach Greg transcript seed to the first prompt after resume
+      const seedText =
+        typeof entry.contextSeed === "string" ? entry.contextSeed : "";
+      if (seedText) {
+        entry.contextSeed = null;
+      }
+      const agentText = applyContextSeed(text, seedText || null);
+
       try {
         // Fire and stream via SSE; resolve when turn completes
-        const result = await entry.bridge.prompt(text);
+        const result = await entry.bridge.prompt(agentText);
         tabs.touch(body.tabId);
         await flushThoughtBuffer(body.tabId, entry);
         await flushAgentBuffer(body.tabId, entry);

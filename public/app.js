@@ -2064,12 +2064,18 @@ async function openHistory(id) {
     activeTabId = st.tabId;
     historyViewId = null;
 
+    const seed = data.contextSeed;
+    const seedNote = data.contextSeeded
+      ? seed?.truncated
+        ? ` · model context restored (${seed.messageCount} turns, truncated)`
+        : ` · model context restored (${seed?.messageCount ?? "?"} turns)`
+      : doc.messages?.length
+        ? ` · ${doc.messages.length} earlier messages (UI only — no model seed)`
+        : "";
     appendBubble(
       st,
       "system",
-      `Resumed · ${data.cwd || doc.cwd || "—"}${
-        doc.messages?.length ? ` · ${doc.messages.length} earlier messages` : ""
-      }`,
+      `Resumed · ${data.cwd || doc.cwd || "—"}${seedNote}`,
     );
 
     if (data.cwd) setWorkspacePath(data.cwd, { openFiles: false });

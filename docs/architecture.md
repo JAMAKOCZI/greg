@@ -106,6 +106,20 @@ Greg-owned history (not `~/.grok/sessions`):
 - UI: **Tasks / Earlier** — open a saved chat **auto-resumes** the agent (`session/new` with same `tabId` + `resume: true`, same transcript file). Composer enabled. Read-only only if resume fails.
 - Integrity: per-id write locks, 0o700 dir / 0o600 files, fsync before rename, await flush on SIGINT/SIGTERM
 
+### Resume + model context
+
+ACP `session/new` always starts a **blank** agent memory. Greg does **not** call Grok `session/load` (that expects upstream `~/.grok` session ids, not Greg transcripts).
+
+On `resume: true` (or restart of an existing live tab), Greg:
+
+1. Loads `~/.greg/sessions/<tabId>.json`
+2. Builds a compact text seed via `lib/resume-context.mjs` (user/agent + short tool/plan lines; skips system/thought/permission; char/message caps; prefers recent turns)
+3. Holds the seed on the tab (`entry.contextSeed`) until the **first** `POST /api/prompt`
+4. Prepends the seed to that prompt with `applyContextSeed` so the model sees prior turns
+5. Persists only the real user message (seed is never written into the transcript)
+
+Response fields on `session/new`: `contextSeeded`, `contextSeed: { messageCount, charCount, truncated }`.
+
 Atomic writes: temp file + rename via `lib/transcript-store.mjs`.
 
 ## Cancel (v0.3)
