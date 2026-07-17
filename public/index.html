@@ -9,12 +9,11 @@
   </head>
   <body>
     <div id="app">
-      <aside class="sidebar" id="sidebar">
+      <aside class="sidebar rail" id="sidebar">
         <div class="brand">
           <span class="logo" aria-hidden="true">G</span>
-          <div>
+          <div class="brand-text">
             <div class="brand-name">Greg</div>
-            <div class="brand-sub">Build</div>
           </div>
           <button
             type="button"
@@ -27,9 +26,15 @@
           </button>
         </div>
 
-        <button type="button" id="btn-new" class="btn primary block">New task</button>
+        <nav class="rail-nav" aria-label="Main">
+          <button type="button" id="btn-new" class="rail-item rail-item-primary">
+            <span class="rail-item-icon" aria-hidden="true">✎</span>
+            <span class="rail-item-label">New task</span>
+          </button>
+        </nav>
 
         <div class="sidebar-section workspace-section">
+          <div class="section-label">Project</div>
           <div class="workspace-pick">
             <button
               type="button"
@@ -46,7 +51,7 @@
         </div>
 
         <div class="sidebar-section chats-section">
-          <div class="section-label">Chats</div>
+          <div class="section-label">Tasks</div>
           <div id="chat-list" class="chat-list" aria-label="Conversations" aria-live="polite">
             <div id="session-list" class="session-list" aria-label="Active sessions"></div>
             <div id="history-divider" class="chat-divider" hidden>Earlier</div>
@@ -54,34 +59,14 @@
           </div>
         </div>
 
-        <div class="sidebar-section settings-section">
-          <div class="section-label">Settings</div>
-          <label class="check">
+        <div class="sidebar-bottom">
+          <label class="check rail-check">
             <input id="always-approve" type="checkbox" />
-            <span>Auto-approve tools</span>
+            <span>Auto-approve</span>
           </label>
-          <div class="field">
-            <label for="model">Model</label>
-            <select id="model" aria-label="Grok Build model">
-              <option value="grok-4.5" selected>Grok 4.5 (default)</option>
-            </select>
+          <div class="sidebar-meta" id="meta">
+            <div class="muted">Starting…</div>
           </div>
-          <div class="field">
-            <label for="effort">Effort</label>
-            <select id="effort" aria-label="Reasoning effort">
-              <option value="high" selected>High (default)</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="sidebar-meta" id="meta">
-          <div class="muted">Starting…</div>
-        </div>
-
-        <div class="sidebar-foot muted">
-          Local only · ACP
         </div>
       </aside>
 
@@ -211,7 +196,23 @@
               disabled
             ></textarea>
             <div class="composer-bar">
-              <span class="muted small" id="hint">New task to start</span>
+              <div class="composer-bar-left">
+                <label class="composer-select-wrap" title="Model">
+                  <span class="sr-only">Model</span>
+                  <select id="model" class="composer-select" aria-label="Grok Build model">
+                    <option value="grok-4.5" selected>Grok 4.5</option>
+                  </select>
+                </label>
+                <label class="composer-select-wrap" title="Effort">
+                  <span class="sr-only">Effort</span>
+                  <select id="effort" class="composer-select" aria-label="Reasoning effort">
+                    <option value="high" selected>High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </label>
+                <span class="muted small composer-hint" id="hint">New task to start</span>
+              </div>
               <div class="composer-actions">
                 <button
                   type="button"

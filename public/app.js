@@ -628,16 +628,16 @@ function populateModelSelect(prefer = null) {
     const opt = document.createElement("option");
     opt.value = m.id;
     const isDefault = m.default || m.id === "grok-4.5";
-    opt.textContent = isDefault
-      ? `${m.name || m.id} (default)`
-      : m.name || m.id;
+    // Compact labels in composer; keep default marker only for non-default extras
+    opt.textContent =
+      m.id === "grok-4.5" ? "Grok 4.5" : m.name || m.id;
     opt.title = m.description || m.id;
     els.model.appendChild(opt);
   }
   if (!seen.has("grok-4.5")) {
     const opt = document.createElement("option");
     opt.value = "grok-4.5";
-    opt.textContent = "Grok 4.5 (default)";
+    opt.textContent = "Grok 4.5";
     els.model.appendChild(opt);
     seen.add("grok-4.5");
   }
@@ -669,12 +669,7 @@ async function loadMeta() {
     const modelHint =
       meta.defaultModel || availableModels.find((m) => m.default)?.id || "grok-4.5";
     els.meta.innerHTML = `
-      <div><strong>greg</strong> v${escapeHtml(meta.version)}</div>
-      <div class="muted">bin: ${escapeHtml(meta.grokBin)}</div>
-      <div class="muted">models: ${escapeHtml(modelHint)}${
-        meta.modelsSource ? ` · ${escapeHtml(meta.modelsSource)}` : ""
-      }</div>
-      <div class="muted">${escapeHtml(meta.platform)}</div>
+      <div class="muted">v${escapeHtml(meta.version)} · ${escapeHtml(modelHint)}</div>
     `;
   } catch (e) {
     els.meta.textContent = e.message;
