@@ -1404,6 +1404,28 @@ function mountTabCard(st, card, isNew) {
 }
 
 /**
+ * Best-effort live bubble count for Earlier chips before /api/history returns.
+ * @param {TabState} st
+ * @returns {number|undefined}
+ */
+function estimateLiveMessageCount(st) {
+  if (!st) return undefined;
+  if (st.tabId === activeTabId && els.transcript && !historyViewId) {
+    let n = 0;
+    for (const child of els.transcript.children) {
+      if (child === els.emptyState) continue;
+      if (child.classList?.contains("empty-state")) continue;
+      n += 1;
+    }
+    if (n > 0) return n;
+  }
+  if (st.park && st.park.childNodes && st.park.childNodes.length > 0) {
+    return st.park.childNodes.length;
+  }
+  return undefined;
+}
+
+/**
  * Push a live tab into historyCache so it appears under Earlier immediately
  * when demoted (before the next /api/history round-trip).
  * @param {TabState} st
@@ -1413,17 +1435,34 @@ function seedHistoryCacheFromTab(st) {
   const id = st.tabId;
   const idx = historyCache.findIndex((h) => h.id === id);
   const prev = idx >= 0 ? historyCache[idx] : null;
+  const estimated = estimateLiveMessageCount(st);
+  const messageCount =
+    typeof prev?.messageCount === "number" && prev.messageCount > 0
+      ? prev.messageCount
+      : estimated;
   const row = {
     id,
     title: st.title ?? prev?.title ?? null,
     cwd: st.cwd || prev?.cwd || "",
     cwdBase: cwdBase(st.cwd) || prev?.cwdBase || "",
     updatedAt: Date.now(),
-    messageCount: prev?.messageCount ?? 0,
+    ...(typeof messageCount === "number" ? { messageCount } : {}),
     ...(prev?.source ? { source: prev.source } : {}),
   };
   if (idx >= 0) historyCache.splice(idx, 1);
   historyCache.unshift(row);
+}
+
+/**
+ * Fire-and-forget server stop (orphaned resume, optimistic demote).
+ * @param {string|null|undefined} tabId
+ */
+function stopServerTabBackground(tabId) {
+  if (!tabId) return;
+  void api("/api/session/stop", {
+    method: "POST",
+    body: JSON.stringify({ tabId }),
+  }).catch(() => {});
 }
 
 /**
@@ -1438,15 +1477,15 @@ function demoteLiveTabsOptimistic(keepId = null) {
     if (keepId && id === keepId) continue;
     const st = tabStates.get(id);
     if (!st) continue;
+    // Finish streaming markdown so demoted UI/history seed is not mid-chunk
+    finalizeMarkdownBubble(st.liveAgentBubble);
+    discardEmptyAgentBubble(st.liveAgentBubble);
     seedHistoryCacheFromTab(st);
     closeStream(st);
     tabStates.delete(id);
     stopped.push(id);
     // Server stop in background — UI already moved
-    void api("/api/session/stop", {
-      method: "POST",
-      body: JSON.stringify({ tabId: id }),
-    }).catch(() => {});
+    stopServerTabBackground(id);
   }
   return stopped;
 }
@@ -1928,7 +1967,6 @@ async function handleAcpRequest(tabId, msg) {
         summary,
         options: [],
         auto: true,
-        pending: false,
       });
       resolvePermissionCard(card, {
         label: allow.name,
@@ -1939,7 +1977,6 @@ async function handleAcpRequest(tabId, msg) {
         summary,
         options: [],
         auto: true,
-        pending: false,
       });
       resolvePermissionCard(card, {
         label: e.message,
@@ -1953,7 +1990,6 @@ async function handleAcpRequest(tabId, msg) {
     summary,
     options,
     auto: false,
-    pending: true,
   });
 
   if (msg.id == null) {
@@ -1984,7 +2020,7 @@ async function handleAcpRequest(tabId, msg) {
 
 /**
  * @param {TabState} st
- * @param {{ summary: ReturnType<typeof summarizePermission>, options: ReturnType<typeof extractPermissionOptions>, auto: boolean, pending: boolean }} opts
+ * @param {{ summary: ReturnType<typeof summarizePermission>, options: ReturnType<typeof extractPermissionOptions>, auto: boolean }} opts
  */
 function renderPermissionCard(st, { summary, options: _options, auto }) {
   const card = document.createElement("div");
@@ -2352,10 +2388,8 @@ async function openHistory(id) {
   try {
     doc = await api(`/api/history/${encodeURIComponent(id)}`);
   } catch (e) {
-    if (gen !== historyLoadGen) {
-      endTranscriptSwap();
-      return;
-    }
+    // Stale gen must not end swap — newer openHistory owns reveal
+    if (gen !== historyLoadGen) return;
     clearPendingResume();
     setStatus("error", "Failed");
     clearTranscriptMessages();
@@ -2369,10 +2403,7 @@ async function openHistory(id) {
     renderHistoryList();
     return;
   }
-  if (gen !== historyLoadGen) {
-    endTranscriptSwap();
-    return;
-  }
+  if (gen !== historyLoadGen) return;
 
   // Refresh pending label from loaded doc
   pendingResumeMeta = {
@@ -2391,7 +2422,24 @@ async function openHistory(id) {
 
   await flushSettingsSave();
   if (gen !== historyLoadGen) return;
-  if (creatingSession) return;
+
+  // Concurrent New task / other resume owns session creation — stay view-only
+  if (creatingSession) {
+    clearPendingResume();
+    historyViewId = id;
+    activeTabId = null;
+    setStatus("idle", "View only");
+    setComposerEnabled(false);
+    setStopEnabled(false);
+    if (els.sessionLabel) {
+      els.sessionLabel.textContent = doc.title
+        ? `${doc.title} · offline`
+        : `chat · ${shortId(id)}`;
+    }
+    renderSessionList();
+    renderHistoryList();
+    return;
+  }
   creatingSession = true;
   if (els.btnNew) els.btnNew.disabled = true;
 
@@ -2407,13 +2455,14 @@ async function openHistory(id) {
         ...sessionModelEffortFromUi(),
       }),
     });
-    if (gen !== historyLoadGen) return;
+    if (gen !== historyLoadGen) {
+      // Abandoned resume left a live agent the client will never adopt
+      stopServerTabBackground(data?.tabId);
+      return;
+    }
 
     // Drop any stray live tabs; keep the resumed id
     demoteLiveTabsOptimistic(data.tabId);
-    for (const otherId of [...tabStates.keys()]) {
-      if (otherId !== data.tabId) tabStates.delete(otherId);
-    }
 
     const st = ensureTabState({
       tabId: data.tabId,
@@ -2553,6 +2602,8 @@ function renderHistoryMessage(m, host = els.transcript) {
     return;
   }
   if (role === "agent") {
+    // Skip decorative-only rows so history does not reintroduce hollow bars
+    if (isDecorativeOnlyMarkdown(text)) return;
     const div = document.createElement("div");
     div.className = "bubble agent";
     const r = document.createElement("span");
@@ -2803,6 +2854,10 @@ async function newSession() {
   if (creatingSession) return;
   creatingSession = true;
   if (els.btnNew) els.btnNew.disabled = true;
+  // Abort any in-flight openHistory so it cannot fight New task for swap/UI
+  historyLoadGen += 1;
+  clearPendingResume();
+  endTranscriptSwap();
   setStatus("busy", "Starting agent…");
   setComposerEnabled(false);
   setStopEnabled(false);

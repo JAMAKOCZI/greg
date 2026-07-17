@@ -37,6 +37,7 @@ export function escapeHtml(s) {
 /**
  * True when markdown is empty or only decorative (`---`, blank lines).
  * Used to drop hollow agent bubbles that paint as bare horizontal bars.
+ * Keep in sync with `lib/text.mjs` (browser cannot import server lib).
  * @param {unknown} md
  * @returns {boolean}
  */

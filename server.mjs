@@ -26,6 +26,7 @@ import {
   collapseTranscriptMessages,
   toolSummaryText,
 } from "./lib/transcript-messages.mjs";
+import { isDecorativeOnlyMarkdown } from "./lib/text.mjs";
 import {
   resolveWorkspace,
   RecentsStore,
@@ -917,7 +918,7 @@ async function persistMessage(tabId, entry, message, opts = {}) {
  */
 async function flushAgentBuffer(tabId, entry) {
   const raw = String(entry.agentBuffer || "");
-  if (!raw.trim()) {
+  if (!raw.trim() || isDecorativeOnlyMarkdown(raw)) {
     entry.agentBuffer = "";
     return;
   }

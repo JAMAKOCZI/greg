@@ -22,13 +22,35 @@ describe("collapseTranscriptMessages", () => {
   });
 
   it("keeps the longer agent text when one is a prefix of the other", () => {
+    const t0 = 1_000_000;
     const out = collapseTranscriptMessages([
-      { role: "agent", text: "Hello" },
-      { role: "agent", text: "Hello world" },
-      { role: "agent", text: "Hello world!" },
+      { role: "agent", text: "Hello", ts: t0 },
+      { role: "agent", text: "Hello world", ts: t0 + 50 },
+      { role: "agent", text: "Hello world!", ts: t0 + 100 },
     ]);
     assert.equal(out.length, 1);
     assert.equal(out[0].text, "Hello world!");
+  });
+
+  it("does not prefix-collapse agent turns far apart in time", () => {
+    const t0 = 1_000_000;
+    const out = collapseTranscriptMessages([
+      { role: "agent", text: "OK", ts: t0 },
+      { role: "agent", text: "OK, here is the full answer", ts: t0 + 60_000 },
+    ]);
+    assert.equal(out.length, 2);
+    assert.equal(out[0].text, "OK");
+    assert.equal(out[1].text, "OK, here is the full answer");
+  });
+
+  it("drops decorative-only agent rows", () => {
+    const out = collapseTranscriptMessages([
+      { role: "agent", text: "---" },
+      { role: "agent", text: "hello" },
+      { role: "agent", text: "\n***\n" },
+    ]);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].text, "hello");
   });
 
   it("keeps distinct agent messages", () => {
