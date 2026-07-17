@@ -554,6 +554,8 @@ const server = createGregServer({
       try {
         const result = await bridge.openSession({ cwd });
         tabs.touch(tabId);
+        // Product rule: only one live agent at a time (others go to history)
+        await stopOtherLiveTabs(tabId);
         try {
           await ensureTranscript(tabId, {
             cwd,
@@ -811,6 +813,31 @@ function endSse(entry) {
     }
   }
   entry.sse.clear();
+}
+
+/**
+ * Keep a single live agent process. Stop/flush every tab except `keepTabId`.
+ * @param {string} keepTabId
+ */
+async function stopOtherLiveTabs(keepTabId) {
+  for (const meta of tabs.list()) {
+    if (meta.tabId === keepTabId) continue;
+    const other = tabs.get(meta.tabId);
+    if (!other) continue;
+    try {
+      await flushThoughtBuffer(meta.tabId, other);
+      await flushAgentBuffer(meta.tabId, other);
+    } catch {
+      /* best-effort flush */
+    }
+    try {
+      other.bridge.stop();
+    } catch {
+      /* ignore */
+    }
+    endSse(other);
+    tabs.delete(meta.tabId);
+  }
 }
 
 /**

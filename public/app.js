@@ -2076,21 +2076,18 @@ function switchToTab(tabId) {
 async function openHistory(id) {
   const gen = ++historyLoadGen;
 
-  // Already live under this id → just switch
+  // Already live under this id → just switch (and drop any stray other tabs)
   const live = tabStates.get(id);
   if (live?.alive) {
     historyViewId = null;
+    await stopAllLiveSessions(id);
     switchToTab(id);
     closeSidebar();
     return;
   }
 
-  // Park current live tab (if any)
-  const prev = activeState();
-  if (prev && !historyViewId) {
-    prev.draft = els.prompt.value;
-    parkActiveTranscript(prev);
-  }
+  // Single-session: stop current live agent before resuming history
+  await stopAllLiveSessions(null);
 
   historyViewId = null;
   closeSidebar();
@@ -2151,6 +2148,12 @@ async function openHistory(id) {
       }),
     });
     if (gen !== historyLoadGen) return;
+
+    // Ensure only this resume is live locally
+    await stopAllLiveSessions(data.tabId);
+    for (const otherId of [...tabStates.keys()]) {
+      if (otherId !== data.tabId) tabStates.delete(otherId);
+    }
 
     const st = ensureTabState({
       tabId: data.tabId,
@@ -2448,6 +2451,39 @@ function renderHistoryList() {
   syncChatDivider();
 }
 
+/**
+ * Stop a live tab without switching UI to another session.
+ * @param {string} tabId
+ * @returns {Promise<boolean>}
+ */
+async function stopSessionCore(tabId) {
+  const st = tabStates.get(tabId);
+  if (!st) return false;
+  try {
+    await api("/api/session/stop", {
+      method: "POST",
+      body: JSON.stringify({ tabId }),
+    });
+  } catch {
+    // Still drop local state if server already gone
+  }
+  closeStream(st);
+  tabStates.delete(tabId);
+  return true;
+}
+
+/**
+ * Product rule: only one live agent. Stop every tab except optional keepId.
+ * @param {string|null} [keepId]
+ */
+async function stopAllLiveSessions(keepId = null) {
+  const ids = [...tabStates.keys()].filter((id) => id !== keepId);
+  for (const id of ids) {
+    await stopSessionCore(id);
+  }
+  if (ids.length) void refreshHistory();
+}
+
 async function newSession() {
   if (creatingSession) return;
   creatingSession = true;
@@ -2459,14 +2495,10 @@ async function newSession() {
   // Ensure disk settings match UI (model clear must win over stale settings.model)
   await flushSettingsSave();
 
-  // Park current tab; do not stop it
-  const prev = activeState();
-  if (prev && !historyViewId) {
-    prev.draft = els.prompt.value;
-    parkActiveTranscript(prev);
-  }
+  // Single-session product: end any live agent before starting a new one
+  await stopAllLiveSessions(null);
 
-  // Temporarily clear view while spawning
+  // Clear view while spawning
   for (const child of [...els.transcript.children]) {
     if (child !== els.emptyState) child.remove();
   }
@@ -2485,6 +2517,12 @@ async function newSession() {
         ...sessionModelEffortFromUi(),
       }),
     });
+
+    // Drop any stale local tabs (server also enforces single live session)
+    await stopAllLiveSessions(data.tabId);
+    for (const id of [...tabStates.keys()]) {
+      if (id !== data.tabId) tabStates.delete(id);
+    }
 
     const st = ensureTabState({
       tabId: data.tabId,
@@ -2520,26 +2558,14 @@ async function newSession() {
     const code = e.data?.code ? ` (${e.data.code})` : "";
     const msg = `${e.message}${code}${hint}`;
 
-    // Restore previous tab if any
-    if (prev) {
-      activeTabId = prev.tabId;
-      restoreTranscript(prev);
-      els.prompt.value = prev.draft || "";
-      appendBubble(prev, "system", msg);
-      setComposerEnabled(prev.alive);
-      setStopEnabled(prev.alive);
-      setStatus(prev.alive ? "ready" : "error", prev.alive ? "Ready" : "Failed");
-      updateSessionLabel(prev);
-    } else {
-      const div = document.createElement("div");
-      div.className = "bubble system";
-      div.textContent = msg;
-      els.transcript.appendChild(div);
-      markTranscriptFilled();
-      setComposerEnabled(false);
-      setStopEnabled(false);
-      updateSessionLabel(null);
-    }
+    const div = document.createElement("div");
+    div.className = "bubble system";
+    div.textContent = msg;
+    els.transcript.appendChild(div);
+    markTranscriptFilled();
+    setComposerEnabled(false);
+    setStopEnabled(false);
+    updateSessionLabel(null);
     renderSessionList();
   } finally {
     creatingSession = false;
@@ -2558,46 +2584,29 @@ async function stopSession(tabId = activeTabId) {
 
   if (tabId === activeTabId && els.btnStop) els.btnStop.disabled = true;
 
-  try {
-    await api("/api/session/stop", {
-      method: "POST",
-      body: JSON.stringify({ tabId }),
-    });
-  } catch (e) {
+  const ok = await stopSessionCore(tabId);
+  if (!ok && tabStates.has(tabId)) {
     if (tabId === activeTabId) {
-      appendBubble(st, "system", `Stop failed: ${e.message}`);
+      appendBubble(st, "system", "Stop failed");
       setStopEnabled(true);
     }
     return;
   }
-
-  closeStream(st);
-  tabStates.delete(tabId);
   void refreshHistory();
 
   if (activeTabId === tabId) {
     activeTabId = null;
-    const remaining = [...tabStates.values()].sort(
-      (a, b) => b.lastActiveAt - a.lastActiveAt,
-    );
-    if (remaining.length) {
-      // Clear current messages before switch
-      for (const child of [...els.transcript.children]) {
-        if (child !== els.emptyState) child.remove();
-      }
-      switchToTab(remaining[0].tabId);
-    } else {
-      for (const child of [...els.transcript.children]) {
-        if (child !== els.emptyState) child.remove();
-      }
-      els.transcript.classList.remove("has-messages");
-      els.prompt.value = "";
-      updateSessionLabel(null);
-      setStatus("idle", "Idle");
-      setComposerEnabled(false);
-      setStopEnabled(false);
-      renderSessionList();
+    // Single-session product: no multi-tab switch after stop
+    for (const child of [...els.transcript.children]) {
+      if (child !== els.emptyState) child.remove();
     }
+    els.transcript.classList.remove("has-messages");
+    els.prompt.value = "";
+    updateSessionLabel(null);
+    setStatus("idle", "Idle");
+    setComposerEnabled(false);
+    setStopEnabled(false);
+    renderSessionList();
   } else {
     renderSessionList();
   }
@@ -2717,24 +2726,38 @@ async function cancelTurn(tabId) {
 async function hydrateSessions() {
   try {
     const data = await api("/api/sessions");
-    const list = data.tabs || [];
-    for (const meta of list) {
-      const st = ensureTabState(meta);
-      // Restore durable transcript before live stream so F5 isn't an empty pane
+    // Prefer most recently active live tab only (single-session product)
+    const list = (data.tabs || [])
+      .filter((t) => t.alive !== false)
+      .sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0));
+    const keep = list[0] || null;
+    // Stop extras on server/client if an older Greg left multiple alive
+    if (keep) {
+      for (const meta of list.slice(1)) {
+        try {
+          await api("/api/session/stop", {
+            method: "POST",
+            body: JSON.stringify({ tabId: meta.tabId }),
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+      const st = ensureTabState(keep);
       await loadTabTranscript(st);
       if (st.alive) connectStream(st);
-    }
-    renderSessionList();
-    if (!activeTabId && list.length) {
-      switchToTab(list[0].tabId);
-    } else if (activeTabId) {
-      const st = activeState();
-      if (st) {
-        // switchToTab may have been skipped; ensure active host has content
-        if (els.transcript && ![...els.transcript.children].some((c) => c !== els.emptyState)) {
+      renderSessionList();
+      if (!activeTabId) switchToTab(st.tabId);
+      else if (activeTabId === st.tabId) {
+        if (
+          els.transcript &&
+          ![...els.transcript.children].some((c) => c !== els.emptyState)
+        ) {
           await loadTabTranscript(st);
         }
       }
+    } else {
+      renderSessionList();
     }
   } catch {
     /* first paint without list is fine */

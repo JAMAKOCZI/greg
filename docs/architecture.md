@@ -103,7 +103,8 @@ Greg-owned history (not `~/.grok/sessions`):
 - Created on `POST /api/session/new` with `id = tabId`
 - Messages appended on user prompts; agent/thought text flushed at turn end; tools upserted by id; plans replaced in place
 - API: `GET /api/history`, `GET /api/history/:id`, `DELETE /api/history/:id` (409 if session still live)
-- UI: **Tasks / Earlier** — open a saved chat **auto-resumes** the agent (`session/new` with same `tabId` + `resume: true`, same transcript file). Composer enabled. Read-only only if resume fails.
+- UI: **Tasks / Earlier** — list sorted **newest → oldest** (`updatedAt` desc). Open a saved chat **auto-resumes** the agent (`session/new` with same `tabId` + `resume: true`, same transcript file). Composer enabled. Read-only only if resume fails.
+- **One live agent only** — `POST /api/session/new` (and client New task / resume) stops every other live tab after flush; prior chats remain under Earlier.
 - Integrity: per-id write locks, 0o700 dir / 0o600 files, fsync before rename, await flush on SIGINT/SIGTERM
 
 ### Resume + model context
@@ -197,7 +198,7 @@ Wire shape matches Grok Build / ACP (see `xai-org/grok-build` leader stdio tests
 ## Roadmap (product)
 
 - [x] Rich tool / diff / plan cards (live ACP stream; `public/cards.js`)
-- [x] Multi-tab live sessions (in-process; concurrent `grok agent stdio`)
+- [x] Single live session at a time (new/resume stops others; history sorted newest-first)
 - [x] Quality foundation (tests + mock agent + tab registry)
 - [x] Cancel / interrupt in-flight turn
 - [x] Durable transcripts under `~/.greg/sessions` (Greg-owned)
