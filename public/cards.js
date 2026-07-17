@@ -1084,7 +1084,8 @@ export function upsertPlanCard(existing, update) {
 }
 
 /**
- * Append a card element into the transcript and scroll into view.
+ * Append a card element into the transcript.
+ * Caller owns stick-to-bottom scrolling (see app.js scrollTranscript).
  * @param {HTMLElement} transcript
  * @param {HTMLElement} card
  */
@@ -1092,6 +1093,5 @@ export function mountCard(transcript, card) {
   if (!card.isConnected) {
     transcript.appendChild(card);
   }
-  transcript.scrollTop = transcript.scrollHeight;
   return card;
 }

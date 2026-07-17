@@ -501,8 +501,38 @@ function syncTranscriptEmptyClass(host = els.transcript) {
   }
 }
 
-function scrollTranscript() {
-  els.transcript.scrollTop = els.transcript.scrollHeight;
+/**
+ * Pin transcript to latest only while the user is already near the bottom.
+ * Scrolling up detaches; scrolling back to the end re-attaches.
+ */
+let stickTranscriptToBottom = true;
+const TRANSCRIPT_STICK_PX = 96;
+
+function isTranscriptNearBottom(el = els.transcript) {
+  if (!el) return true;
+  const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+  return gap <= TRANSCRIPT_STICK_PX;
+}
+
+function updateTranscriptStickFromScroll() {
+  stickTranscriptToBottom = isTranscriptNearBottom();
+}
+
+/**
+ * @param {{ force?: boolean }} [opts]
+ * force — always jump (user send, switch chat, load history)
+ */
+function scrollTranscript(opts = {}) {
+  const force = opts.force === true;
+  if (!force && !stickTranscriptToBottom) return;
+  const el = els.transcript;
+  if (!el) return;
+  // Instant pin — CSS smooth fights continuous streaming updates
+  const prev = el.style.scrollBehavior;
+  el.style.scrollBehavior = "auto";
+  el.scrollTop = el.scrollHeight;
+  el.style.scrollBehavior = prev;
+  stickTranscriptToBottom = true;
 }
 
 /** Message host for a tab: live transcript if active, else parked fragment. */
@@ -700,7 +730,7 @@ function restoreTranscript(st) {
     st.park = null;
   }
   syncTranscriptEmptyClass();
-  scrollTranscript();
+  scrollTranscript({ force: true });
 }
 
 async function api(path, opts = {}) {
@@ -2154,7 +2184,7 @@ async function openHistory(id) {
     renderHistoryMessage(m);
   }
   markTranscriptFilled();
-  scrollTranscript();
+  scrollTranscript({ force: true });
 
   await flushSettingsSave();
   if (creatingSession) return;
@@ -2244,7 +2274,7 @@ async function openHistory(id) {
     }. Showing saved transcript only.`;
     els.transcript.appendChild(div);
     markTranscriptFilled();
-    scrollTranscript();
+    scrollTranscript({ force: true });
     renderSessionList();
     renderHistoryList();
   } finally {
@@ -2348,7 +2378,7 @@ async function loadTabTranscript(st) {
     }
     if (host === els.transcript) {
       markTranscriptFilled();
-      scrollTranscript();
+      scrollTranscript({ force: true });
     }
   } catch {
     /* history optional for live tabs */
@@ -2647,6 +2677,8 @@ async function sendPrompt() {
   st.draft = "";
   resetLive(st);
   appendBubble(st, "user", text, { role: "you" });
+  // New user turn: re-pin to bottom so streaming follows unless they scroll away
+  scrollTranscript({ force: true });
   st.sending = true;
   st.cancelHttpInflight = false;
   if (st.tabId === activeTabId) {
@@ -2858,6 +2890,14 @@ function toggleSidebar() {
 }
 
 // ── Events ───────────────────────────────────────────────────
+
+if (els.transcript) {
+  els.transcript.addEventListener(
+    "scroll",
+    () => updateTranscriptStickFromScroll(),
+    { passive: true },
+  );
+}
 
 els.btnNew.addEventListener("click", () => newSession());
 els.btnSend.addEventListener("click", () => sendPrompt());
