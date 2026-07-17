@@ -57,8 +57,9 @@ Read-only file tree + text preview (no editor; writes still go through agent too
 - Tree: depth clamped to **3** (`MAX_TREE_DEPTH`); UI uses **depth 0** + lazy expand per folder
 - File: text only, size cap 512 KiB (truncated flag); binary → `415` / `BINARY`
 - HTTP: shared status map — `OUTSIDE_ROOT`/`EACCES` → 403, `NOT_FOUND`/`ROOT_NOT_FOUND` → 404, `BINARY` → 415
-- API: `GET /api/fs/tree?root=&path=&depth=`, `GET /api/fs/file?root=&path=`
-- UI: topbar **Files**; refreshes when switching sessions / history / new session; expand retries on error
+- API: `GET /api/fs/tree?root=&path=&depth=`, `GET /api/fs/file?root=&path=`, `GET /api/fs/dirs?path=` (folder picker)
+- UI: topbar **Files**; sidebar **workspace** uses a folder explorer modal (not free-text path); picking a folder opens Files panel
+- UI: refreshes when switching sessions / history / new session; expand retries on error
 
 ## ACP card fixtures (v0.7)
 

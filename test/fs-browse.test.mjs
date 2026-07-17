@@ -13,6 +13,7 @@ import {
   isPathInsideRoot,
   resolveUnderRoot,
   listTree,
+  listDirectories,
   readWorkspaceFile,
   looksBinary,
   fsBrowseHttpStatus,
@@ -244,6 +245,22 @@ describe("resolveUnderRoot / listTree / readWorkspaceFile", () => {
     } finally {
       await rm(outside, { recursive: true, force: true });
     }
+  });
+
+  it("listDirectories returns only dirs and parent", async () => {
+    const r = await listDirectories(root);
+    assert.equal(r.ok, true);
+    assert.equal(r.path, root);
+    assert.ok(r.entries.some((e) => e.name === "src" && e.type === "dir"));
+    assert.ok(!r.entries.some((e) => e.name === "README.md"));
+    assert.ok(!r.entries.some((e) => e.name === "node_modules"));
+    assert.ok(r.parent);
+  });
+
+  it("listDirectories rejects filesystem root", async () => {
+    const r = await listDirectories("/");
+    assert.equal(r.ok, false);
+    assert.equal(r.code, "ROOT_FORBIDDEN");
   });
 
   it("rejects readWorkspaceFile on file symlink to outside", async () => {

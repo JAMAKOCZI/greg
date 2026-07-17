@@ -31,12 +31,20 @@
 
         <div class="sidebar-section">
           <div class="section-label">Workspace</div>
-          <div class="field">
-            <label class="sr-only" for="cwd">Workspace path</label>
-            <input id="cwd" type="text" spellcheck="false" autocomplete="off" placeholder="/path/to/project" />
+          <div class="workspace-pick">
+            <button
+              type="button"
+              id="btn-browse-cwd"
+              class="workspace-path-btn"
+              title="Browse for a project folder"
+            >
+              <span class="workspace-path-icon" aria-hidden="true">📁</span>
+              <span id="cwd-label" class="workspace-path-label muted">Choose a folder…</span>
+            </button>
+            <input id="cwd" type="hidden" value="" />
           </div>
           <div id="recents-list" class="recents-list" aria-label="Recent workspaces"></div>
-          <p class="recents-hint muted small">Projects you open will show up here.</p>
+          <p class="recents-hint muted small">Browse or pick a recent project.</p>
         </div>
 
         <div class="sidebar-section sessions-section">
@@ -206,6 +214,29 @@
         </footer>
       </main>
     </div>
+
+    <!-- Workspace folder picker -->
+    <div id="folder-picker" class="folder-picker" hidden role="dialog" aria-modal="true" aria-labelledby="folder-picker-title">
+      <div class="folder-picker-backdrop" id="folder-picker-backdrop"></div>
+      <div class="folder-picker-panel">
+        <header class="folder-picker-head">
+          <h2 id="folder-picker-title" class="folder-picker-title">Choose workspace</h2>
+          <button type="button" id="folder-picker-close" class="btn icon subtle" aria-label="Close">✕</button>
+        </header>
+        <div class="folder-picker-toolbar">
+          <button type="button" id="folder-picker-up" class="btn subtle" title="Parent folder">↑ Up</button>
+          <button type="button" id="folder-picker-home" class="btn subtle" title="Home directory">Home</button>
+          <span id="folder-picker-path" class="folder-picker-path" title=""></span>
+        </div>
+        <div id="folder-picker-list" class="folder-picker-list" role="listbox" aria-label="Folders"></div>
+        <p id="folder-picker-status" class="folder-picker-status muted small"></p>
+        <footer class="folder-picker-foot">
+          <button type="button" id="folder-picker-cancel" class="btn subtle">Cancel</button>
+          <button type="button" id="folder-picker-select" class="btn primary">Use this folder</button>
+        </footer>
+      </div>
+    </div>
+
     <script type="module" src="/app.js"></script>
   </body>
 </html>

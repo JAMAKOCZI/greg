@@ -32,6 +32,7 @@ import {
 } from "./lib/settings.mjs";
 import {
   listTree,
+  listDirectories,
   readWorkspaceFile,
   fsBrowseHttpStatus,
 } from "./lib/fs-browse.mjs";
@@ -242,6 +243,27 @@ const server = createGregServer({
           (await effectiveDefaultCwd());
         const path = (url.searchParams.get("path") || "").trim();
         const result = await readWorkspaceFile(root, path);
+        if (!result.ok) {
+          json(res, fsBrowseHttpStatus(result.code), {
+            error: result.error,
+            code: result.code,
+          });
+          return true;
+        }
+        json(res, 200, result);
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    // Directory picker (workspace chooser) — list dirs at an absolute path
+    if (url.pathname === "/api/fs/dirs" && req.method === "GET") {
+      try {
+        const path =
+          (url.searchParams.get("path") || "").trim() ||
+          (await effectiveDefaultCwd());
+        const result = await listDirectories(path);
         if (!result.ok) {
           json(res, fsBrowseHttpStatus(result.code), {
             error: result.error,

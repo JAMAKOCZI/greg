@@ -8,6 +8,18 @@ const $ = (id) => document.getElementById(id);
 
 const els = {
   cwd: $("cwd"),
+  cwdLabel: $("cwd-label"),
+  btnBrowseCwd: $("btn-browse-cwd"),
+  folderPicker: $("folder-picker"),
+  folderPickerBackdrop: $("folder-picker-backdrop"),
+  folderPickerClose: $("folder-picker-close"),
+  folderPickerUp: $("folder-picker-up"),
+  folderPickerHome: $("folder-picker-home"),
+  folderPickerPath: $("folder-picker-path"),
+  folderPickerList: $("folder-picker-list"),
+  folderPickerStatus: $("folder-picker-status"),
+  folderPickerCancel: $("folder-picker-cancel"),
+  folderPickerSelect: $("folder-picker-select"),
   meta: $("meta"),
   status: $("status"),
   statusText: $("status-text"),
@@ -97,6 +109,150 @@ function cwdBase(cwd) {
   if (!cwd) return "";
   const parts = cwd.replace(/\\/g, "/").split("/").filter(Boolean);
   return parts[parts.length - 1] || cwd;
+}
+
+/** Keep hidden #cwd and visible label in sync. */
+function setWorkspacePath(path, { openFiles = false } = {}) {
+  const p = (path || "").trim();
+  if (els.cwd) els.cwd.value = p;
+  if (els.cwdLabel) {
+    if (p) {
+      els.cwdLabel.textContent = p;
+      els.cwdLabel.classList.add("has-path");
+      els.cwdLabel.title = p;
+    } else {
+      els.cwdLabel.textContent = "Choose a folder…";
+      els.cwdLabel.classList.remove("has-path");
+      els.cwdLabel.title = "";
+    }
+  }
+  if (els.btnBrowseCwd) {
+    els.btnBrowseCwd.title = p
+      ? `Workspace: ${p} — click to change`
+      : "Browse for a project folder";
+  }
+  if (openFiles && p) {
+    setFilesPanelOpen(true);
+    void refreshFilesTree();
+  } else if (filesPanelOpen) {
+    syncFilesPanelToWorkspace();
+  }
+}
+
+/* ── Workspace folder picker ─────────────────────────────── */
+
+/** @type {string} */
+let pickerPath = "";
+/** @type {string|null} */
+let pickerParent = null;
+/** @type {string} */
+let pickerHome = "";
+/** @type {number} */
+let pickerLoadGen = 0;
+
+function isFolderPickerOpen() {
+  return Boolean(els.folderPicker && !els.folderPicker.hidden);
+}
+
+function openFolderPicker(startPath) {
+  if (!els.folderPicker) return;
+  els.folderPicker.hidden = false;
+  const start =
+    (startPath || els.cwd?.value || settings.defaultCwd || "").trim() || "";
+  void loadFolderPicker(start || undefined);
+  // Focus select for keyboard users
+  queueMicrotask(() => {
+    els.folderPickerSelect?.focus();
+  });
+}
+
+function closeFolderPicker() {
+  if (!els.folderPicker) return;
+  els.folderPicker.hidden = true;
+  if (els.folderPickerStatus) {
+    els.folderPickerStatus.textContent = "";
+    els.folderPickerStatus.classList.remove("is-error");
+  }
+}
+
+/**
+ * @param {string} [path]
+ */
+async function loadFolderPicker(path) {
+  if (!els.folderPickerList) return;
+  const gen = ++pickerLoadGen;
+  els.folderPickerList.innerHTML =
+    '<div class="folder-picker-empty muted">Loading…</div>';
+  if (els.folderPickerStatus) {
+    els.folderPickerStatus.textContent = "";
+    els.folderPickerStatus.classList.remove("is-error");
+  }
+  if (els.folderPickerUp) els.folderPickerUp.disabled = true;
+  if (els.folderPickerSelect) els.folderPickerSelect.disabled = true;
+
+  try {
+    const q = new URLSearchParams();
+    if (path) q.set("path", path);
+    const data = await api(`/api/fs/dirs?${q}`);
+    if (gen !== pickerLoadGen) return;
+
+    pickerPath = data.path || "";
+    pickerParent = data.parent || null;
+    pickerHome = data.home || "";
+
+    if (els.folderPickerPath) {
+      els.folderPickerPath.textContent = pickerPath;
+      els.folderPickerPath.title = pickerPath;
+    }
+    if (els.folderPickerUp) els.folderPickerUp.disabled = !pickerParent;
+    if (els.folderPickerSelect) els.folderPickerSelect.disabled = !pickerPath;
+
+    els.folderPickerList.innerHTML = "";
+    const entries = data.entries || [];
+    if (!entries.length) {
+      els.folderPickerList.innerHTML =
+        '<div class="folder-picker-empty muted">No subfolders here — use “Use this folder” to select it.</div>';
+    } else {
+      for (const ent of entries) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "folder-picker-item";
+        btn.setAttribute("role", "option");
+        btn.dataset.path = ent.path;
+        btn.innerHTML = `
+          <span class="folder-picker-item-icon" aria-hidden="true">📁</span>
+          <span class="folder-picker-item-name"></span>
+        `;
+        btn.querySelector(".folder-picker-item-name").textContent = ent.name;
+        btn.title = ent.path;
+        btn.addEventListener("click", () => {
+          void loadFolderPicker(ent.path);
+        });
+        btn.addEventListener("dblclick", (e) => {
+          e.preventDefault();
+          void loadFolderPicker(ent.path);
+        });
+        els.folderPickerList.appendChild(btn);
+      }
+    }
+    if (data.truncated && els.folderPickerStatus) {
+      els.folderPickerStatus.textContent = "Listing truncated (too many folders).";
+    }
+  } catch (e) {
+    if (gen !== pickerLoadGen) return;
+    els.folderPickerList.innerHTML = "";
+    if (els.folderPickerStatus) {
+      els.folderPickerStatus.textContent = e.message || "Failed to list folder";
+      els.folderPickerStatus.classList.add("is-error");
+    }
+    if (els.folderPickerSelect) els.folderPickerSelect.disabled = true;
+  }
+}
+
+function confirmFolderPicker() {
+  if (!pickerPath) return;
+  setWorkspacePath(pickerPath, { openFiles: true });
+  closeFolderPicker();
 }
 
 function displayTitle(st) {
@@ -287,9 +443,12 @@ async function loadMeta() {
     }
     populateModelSelect(meta.settings?.model || "");
     if (meta.settings) applySettingsToUi(meta.settings);
-    if (!els.cwd.value) {
-      els.cwd.value =
+    if (!els.cwd?.value) {
+      const initial =
         (meta.settings && meta.settings.defaultCwd) || meta.defaultCwd || "";
+      if (initial) setWorkspacePath(initial);
+    } else {
+      setWorkspacePath(els.cwd.value);
     }
     const modelHint =
       meta.defaultModel || availableModels.find((m) => m.default)?.id || "grok-4.5";
@@ -375,8 +534,8 @@ async function saveSettings() {
       if (gen !== settingsSaveGen) return;
       if (data.settings) {
         settings = data.settings;
-        if (settings.defaultCwd && !els.cwd.value.trim()) {
-          els.cwd.value = settings.defaultCwd;
+        if (settings.defaultCwd && !els.cwd?.value?.trim()) {
+          setWorkspacePath(settings.defaultCwd);
         }
       }
     } catch (e) {
@@ -740,7 +899,7 @@ function renderRecents() {
     `;
     pick.addEventListener("click", () => {
       if (creatingSession) return;
-      els.cwd.value = item.path;
+      setWorkspacePath(item.path, { openFiles: true });
       void newSession();
     });
 
@@ -1524,7 +1683,7 @@ function switchToTab(tabId) {
   activeTabId = tabId;
   restoreTranscript(next);
   els.prompt.value = next.draft || "";
-  if (next.cwd) els.cwd.value = next.cwd;
+  if (next.cwd) setWorkspacePath(next.cwd);
 
   if (next.alive) connectStream(next);
   updateSessionLabel(next);
@@ -1582,7 +1741,7 @@ async function openHistory(id) {
     els.sessionLabel.textContent = doc.title
       ? `history · ${doc.title}`
       : `history · ${shortId(id)}`;
-    if (doc.cwd) els.cwd.value = doc.cwd;
+    if (doc.cwd) setWorkspacePath(doc.cwd);
     syncFilesPanelToWorkspace();
 
     for (const child of [...els.transcript.children]) {
@@ -1856,7 +2015,7 @@ async function newSession() {
     appendBubble(st, "system", "Spawning grok agent stdio…");
     appendBubble(st, "system", `Session ready · ${data.cwd}`);
 
-    if (data.cwd) els.cwd.value = data.cwd;
+    if (data.cwd) setWorkspacePath(data.cwd, { openFiles: true });
     connectStream(st);
     updateSessionLabel(st);
     setStatus("ready", "Ready");
@@ -2207,6 +2366,11 @@ document.addEventListener("keydown", (e) => {
   }
 
   if (e.key !== "Escape") return;
+  if (isFolderPickerOpen()) {
+    closeFolderPicker();
+    e.preventDefault();
+    return;
+  }
   if (document.body.classList.contains("sidebar-open")) {
     closeSidebar();
     e.preventDefault();
@@ -2269,6 +2433,32 @@ if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
     sidebarMq.addListener(onSidebarMq);
   }
   syncSidebarChrome();
+}
+
+if (els.btnBrowseCwd) {
+  els.btnBrowseCwd.addEventListener("click", () => openFolderPicker());
+}
+if (els.folderPickerBackdrop) {
+  els.folderPickerBackdrop.addEventListener("click", () => closeFolderPicker());
+}
+if (els.folderPickerClose) {
+  els.folderPickerClose.addEventListener("click", () => closeFolderPicker());
+}
+if (els.folderPickerCancel) {
+  els.folderPickerCancel.addEventListener("click", () => closeFolderPicker());
+}
+if (els.folderPickerSelect) {
+  els.folderPickerSelect.addEventListener("click", () => confirmFolderPicker());
+}
+if (els.folderPickerUp) {
+  els.folderPickerUp.addEventListener("click", () => {
+    if (pickerParent) void loadFolderPicker(pickerParent);
+  });
+}
+if (els.folderPickerHome) {
+  els.folderPickerHome.addEventListener("click", () => {
+    void loadFolderPicker(pickerHome || "~");
+  });
 }
 
 if (els.btnFiles) {
