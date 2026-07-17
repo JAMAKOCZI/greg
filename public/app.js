@@ -1773,12 +1773,8 @@ async function handleAcpRequest(tabId, msg) {
   if (auto) {
     const allow =
       options.find((o) => isAllowKind(o.kind, o.optionId)) || options[0];
-    const card = renderPermissionCard(st, {
-      summary,
-      options: [],
-      auto: true,
-      pending: true,
-    });
+    // No pending full card — those boxes left green double-bars after resolve.
+    // Only a compact one-line note once the API returns.
     try {
       await api("/api/permission", {
         method: "POST",
@@ -1790,13 +1786,25 @@ async function handleAcpRequest(tabId, msg) {
           },
         }),
       });
+      const card = renderPermissionCard(st, {
+        summary,
+        options: [],
+        auto: true,
+        pending: false,
+      });
       resolvePermissionCard(card, {
-        label: `Auto-approved · ${allow.name}`,
+        label: allow.name,
         state: "auto-done",
       });
     } catch (e) {
+      const card = renderPermissionCard(st, {
+        summary,
+        options: [],
+        auto: true,
+        pending: false,
+      });
       resolvePermissionCard(card, {
-        label: `Auto-approve failed: ${e.message}`,
+        label: e.message,
         state: "failed",
       });
     }
@@ -1842,7 +1850,8 @@ async function handleAcpRequest(tabId, msg) {
  */
 function renderPermissionCard(st, { summary, options: _options, auto }) {
   const card = document.createElement("div");
-  card.className = `bubble perm-card${auto ? " auto" : ""}`;
+  // Not `.bubble` — base bubble border + perm-card border stacked into thick bars
+  card.className = `perm-card${auto ? " auto" : ""}`;
   card.setAttribute("role", "group");
   card.setAttribute(
     "aria-label",
@@ -1922,6 +1931,10 @@ function resolvePermissionCard(card, { label, state }) {
   card.classList.remove("auto");
   if (state === "auto-done") card.classList.add("auto");
 
+  // Flatten to a one-line note (CSS hides head/body/actions) — full boxes
+  // with green borders were the "two horizontal bars" after approve.
+  const headline =
+    card.querySelector(".perm-title")?.textContent?.trim() || "";
   const actions = card.querySelector(".perm-actions");
   if (actions) {
     for (const btn of actions.querySelectorAll("button")) {
@@ -1930,13 +1943,32 @@ function resolvePermissionCard(card, { label, state }) {
   }
 
   const text = card.querySelector(".outcome-text");
-  if (text) text.textContent = label;
+  if (text) {
+    const prefix =
+      state === "auto-done"
+        ? "Auto-approved"
+        : state === "allowed"
+          ? "Allowed"
+          : state === "denied"
+            ? "Denied"
+            : state === "failed"
+              ? "Failed"
+              : "Done";
+    // Prefer short outcome; keep tool name when useful
+    const detail = label && label !== prefix ? label : headline;
+    text.textContent = detail ? `${prefix} · ${detail}` : prefix;
+  }
 
   const badge = card.querySelector(".perm-badge");
   if (badge && state === "auto-done") badge.textContent = "Auto-approved";
   else if (badge && state === "allowed") badge.textContent = "Allowed";
   else if (badge && state === "denied") badge.textContent = "Denied";
   else if (badge && state === "failed") badge.textContent = "Failed";
+
+  card.setAttribute(
+    "aria-label",
+    text?.textContent || "Permission resolved",
+  );
 }
 
 /**

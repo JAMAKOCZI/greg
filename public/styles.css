@@ -1719,9 +1719,14 @@ body.files-open .main-body {
 }
 
 /* ── Permission cards ────────────────────────────────────── */
+/* Pending: full interactive card. Resolved: one compact line —
+   full green/red box chrome was reading as double horizontal bars
+   in the middle of the chat after each approve. */
 
 .perm-card {
-  align-self: stretch;
+  /* do not use .bubble padding/border — that doubled the frame */
+  align-self: center;
+  width: 100%;
   max-width: min(640px, 100%);
   margin: 2px auto;
   padding: 0;
@@ -1731,6 +1736,7 @@ body.files-open .main-body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
   white-space: normal;
+  line-height: 1.45;
 }
 
 .perm-card.auto {
@@ -1739,27 +1745,38 @@ body.files-open .main-body {
   box-shadow: none;
 }
 
-/* Quieter auto cards: no empty action strip while approving */
-.perm-card.auto:not(.resolved) .perm-actions {
-  display: none;
-}
-
+/* Quieter auto cards: no empty action / outcome strip while approving */
+.perm-card.auto:not(.resolved) .perm-actions,
 .perm-card.auto:not(.resolved) .perm-outcome {
-  display: flex;
-  color: var(--muted);
+  display: none !important;
 }
 
+/* ── Resolved: single muted line, no box ─────────────────── */
 .perm-card.resolved {
-  opacity: 0.88;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  opacity: 0.9;
+  max-width: min(520px, 100%);
+  padding: 2px 8px;
+  overflow: visible;
 }
 
-.perm-card.denied {
-  border-color: rgba(248, 113, 113, 0.28);
+.perm-card.resolved .perm-head,
+.perm-card.resolved .perm-body,
+.perm-card.resolved .perm-actions {
+  display: none !important;
 }
 
-.perm-card.allowed,
-.perm-card.auto-done {
-  border-color: rgba(74, 222, 128, 0.22);
+.perm-card.resolved .perm-outcome {
+  display: flex !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 2px 0;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .perm-head {
@@ -1864,14 +1881,6 @@ body.files-open .main-body {
   font-size: 12.5px;
   font-weight: 500;
   color: var(--muted);
-}
-
-.perm-card.resolved .perm-actions {
-  display: none;
-}
-
-.perm-card.resolved .perm-outcome {
-  display: flex;
 }
 
 .perm-outcome .outcome-dot {
