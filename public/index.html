@@ -14,7 +14,7 @@
           <span class="logo" aria-hidden="true">G</span>
           <div>
             <div class="brand-name">Greg</div>
-            <div class="brand-sub">Grok Build desk</div>
+            <div class="brand-sub">Build</div>
           </div>
           <button
             type="button"
@@ -27,7 +27,7 @@
           </button>
         </div>
 
-        <button type="button" id="btn-new" class="btn primary block">New session</button>
+        <button type="button" id="btn-new" class="btn primary block">New task</button>
 
         <div class="sidebar-section workspace-section">
           <div class="workspace-pick">
@@ -124,9 +124,32 @@
         <div class="main-body">
           <section id="transcript" class="transcript" aria-live="polite">
             <div class="empty-state" id="empty-state">
-              <div class="empty-mark" aria-hidden="true">G</div>
-              <p class="empty-title">New session to start</p>
-              <p class="empty-sub muted">local ACP desk</p>
+              <div class="empty-mark" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M7 15a4 4 0 0 1 .3-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 18 16H7.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M9 19h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <h1 class="empty-hero">What should we build?</h1>
+              <p class="empty-sub muted">Local desk for Grok Build</p>
+              <div class="empty-cards" id="empty-cards">
+                <button type="button" class="empty-card" data-action="explore">
+                  <span class="empty-card-icon" aria-hidden="true">◎</span>
+                  <span class="empty-card-text">Explore the codebase</span>
+                </button>
+                <button type="button" class="empty-card" data-action="feature">
+                  <span class="empty-card-icon" aria-hidden="true">✦</span>
+                  <span class="empty-card-text">Create a feature or tool</span>
+                </button>
+                <button type="button" class="empty-card" data-action="review">
+                  <span class="empty-card-icon" aria-hidden="true">↻</span>
+                  <span class="empty-card-text">Review code and suggest changes</span>
+                </button>
+                <button type="button" class="empty-card" data-action="fix">
+                  <span class="empty-card-icon" aria-hidden="true">⚑</span>
+                  <span class="empty-card-text">Fix problems and bugs</span>
+                </button>
+              </div>
             </div>
           </section>
 
@@ -170,14 +193,25 @@
 
         <footer class="composer">
           <div class="composer-dock">
+            <div class="composer-context">
+              <button
+                type="button"
+                id="composer-project"
+                class="composer-chip"
+                title="Choose project folder"
+              >
+                <span aria-hidden="true">📁</span>
+                <span id="composer-project-label">Choose project</span>
+              </button>
+            </div>
             <textarea
               id="prompt"
-              rows="3"
-              placeholder="Message Greg… (Enter send · ⌘/Ctrl+Enter · Ctrl+. cancel · Shift+Enter newline)"
+              rows="2"
+              placeholder="Do anything…"
               disabled
             ></textarea>
             <div class="composer-bar">
-              <span class="muted small" id="hint">Create a session to start</span>
+              <span class="muted small" id="hint">New task to start</span>
               <div class="composer-actions">
                 <button
                   type="button"
@@ -189,7 +223,16 @@
                 >
                   Cancel
                 </button>
-                <button type="button" id="btn-send" class="btn primary" disabled>Send</button>
+                <button
+                  type="button"
+                  id="btn-send"
+                  class="btn primary btn-send"
+                  disabled
+                  title="Send (Enter)"
+                  aria-label="Send"
+                >
+                  ↑
+                </button>
               </div>
             </div>
           </div>

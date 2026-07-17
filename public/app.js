@@ -10,6 +10,9 @@ const els = {
   cwd: $("cwd"),
   cwdLabel: $("cwd-label"),
   btnBrowseCwd: $("btn-browse-cwd"),
+  composerProject: $("composer-project"),
+  composerProjectLabel: $("composer-project-label"),
+  emptyCards: $("empty-cards"),
   folderPicker: $("folder-picker"),
   folderPickerBackdrop: $("folder-picker-backdrop"),
   folderPickerClose: $("folder-picker-close"),
@@ -117,10 +120,11 @@ function cwdBase(cwd) {
 function setWorkspacePath(path, { openFiles = false } = {}) {
   const p = (path || "").trim();
   if (els.cwd) els.cwd.value = p;
+  const short = p ? cwdBase(p) || p : "";
   if (els.cwdLabel) {
     if (p) {
       // Short name in UI; full path on hover
-      els.cwdLabel.textContent = cwdBase(p) || p;
+      els.cwdLabel.textContent = short;
       els.cwdLabel.classList.add("has-path");
       els.cwdLabel.title = p;
     } else {
@@ -128,6 +132,15 @@ function setWorkspacePath(path, { openFiles = false } = {}) {
       els.cwdLabel.classList.remove("has-path");
       els.cwdLabel.title = "";
     }
+  }
+  if (els.composerProjectLabel) {
+    els.composerProjectLabel.textContent = short || "Choose project";
+  }
+  if (els.composerProject) {
+    els.composerProject.title = p
+      ? `${p} — click to change`
+      : "Choose project folder";
+    els.composerProject.classList.toggle("has-path", Boolean(p));
   }
   if (els.btnBrowseCwd) {
     els.btnBrowseCwd.title = p
@@ -1822,7 +1835,7 @@ function refreshActiveComposer() {
     els.prompt.disabled = true;
     els.btnSend.disabled = true;
     setCancelVisible(false);
-    els.hint.textContent = "Create a session to start";
+    els.hint.textContent = "New task to start";
     return;
   }
 
@@ -1837,14 +1850,11 @@ function refreshActiveComposer() {
   }
 
   if (!on) {
-    els.hint.textContent =
-      "Session stopped — pick a live tab or start a new one";
+    els.hint.textContent = "Session stopped — new task or pick a chat";
   } else if (busy) {
-    els.hint.textContent =
-      "Running… Cancel or Ctrl+. to stop the turn (Stop session forces kill)";
+    els.hint.textContent = "Running… Cancel / Ctrl+.";
   } else {
-    els.hint.textContent =
-      "Enter to send · ⌘/Ctrl+Enter · Ctrl+. cancel · Esc focus";
+    els.hint.textContent = "Enter to send · Ctrl+. cancel";
   }
 }
 
@@ -1856,11 +1866,51 @@ function setComposerEnabled(on) {
     setCancelVisible(false);
     const st = activeState();
     els.hint.textContent = st
-      ? "Session stopped — pick a live tab or start a new one"
-      : "Create a session to start";
+      ? "Session stopped — new task or pick a chat"
+      : "New task to start";
     return;
   }
   refreshActiveComposer();
+}
+
+/**
+ * Empty-state suggestion chips (Codex-style).
+ * @param {string} action
+ */
+async function handleEmptyCard(action) {
+  const prompts = {
+    explore:
+      "Explore this codebase: outline structure, key modules, and how to run it.",
+    feature:
+      "Help me design and implement a new feature. Ask clarifying questions first.",
+    review:
+      "Review recent changes and suggest improvements, risks, and missing tests.",
+    fix: "Find and fix bugs or failing behavior in this project. Start with a quick diagnosis.",
+  };
+
+  if (action === "explore") {
+    const root = (els.cwd?.value || "").trim();
+    if (!root) {
+      openFolderPicker();
+      return;
+    }
+    setFilesPanelOpen(true);
+    void refreshFilesTree();
+  }
+
+  const text = prompts[action];
+  if (!text) return;
+
+  // Ensure a live session, then fill + send
+  let st = activeState();
+  if (!st?.alive) {
+    await newSession();
+    st = activeState();
+  }
+  if (!st?.alive) return;
+  els.prompt.value = text;
+  st.draft = text;
+  void sendPrompt();
 }
 
 function setStopEnabled(on) {
@@ -2556,6 +2606,17 @@ function toggleSidebar() {
 
 els.btnNew.addEventListener("click", () => newSession());
 els.btnSend.addEventListener("click", () => sendPrompt());
+
+if (els.composerProject) {
+  els.composerProject.addEventListener("click", () => openFolderPicker());
+}
+if (els.emptyCards) {
+  els.emptyCards.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn || !els.emptyCards.contains(btn)) return;
+    void handleEmptyCard(btn.getAttribute("data-action") || "");
+  });
+}
 
 if (els.alwaysApprove) {
   els.alwaysApprove.addEventListener("change", () => scheduleSettingsSave());
