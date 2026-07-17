@@ -149,8 +149,10 @@ let pickerPath = "";
 let pickerParent = null;
 /** @type {string} */
 let pickerHome = "";
-/** @type {{ id: string, path: string, label: string }[]} */
+/** @type {{ id: string, path: string, label: string, system?: boolean }[]} */
 let pickerRoots = [];
+/** @type {string} */
+let pickerDefaultRoot = "";
 /** @type {number} */
 let pickerLoadGen = 0;
 /** @type {boolean} */
@@ -174,7 +176,11 @@ function openFolderPicker(startPath) {
   els.folderPicker.hidden = false;
   const start =
     (startPath || els.cwd?.value || settings.defaultCwd || "").trim() || "";
-  void ensurePickerRoots().then(() => loadFolderPicker(start || undefined));
+  void ensurePickerRoots().then(() => {
+    // No path yet → open on system drive (not Home)
+    const initial = start || pickerDefaultRoot || undefined;
+    return loadFolderPicker(initial);
+  });
   queueMicrotask(() => {
     els.folderPickerSelect?.focus();
   });
@@ -195,32 +201,43 @@ async function ensurePickerRoots() {
     const data = await api("/api/fs/roots");
     pickerRoots = data.roots || [];
     pickerHome = data.home || pickerHome;
+    pickerDefaultRoot =
+      data.defaultRoot ||
+      pickerRoots.find((r) => r.system)?.path ||
+      pickerRoots[0]?.path ||
+      "";
     pickerRootsLoaded = true;
     populateDriveSelect();
   } catch {
     pickerRoots = [];
+    pickerDefaultRoot = "";
     pickerRootsLoaded = true;
     populateDriveSelect();
   }
 }
 
-function populateDriveSelect() {
+function populateDriveSelect(preferPath = null) {
   if (!els.folderPickerDrive) return;
-  const prev = els.folderPickerDrive.value;
+  const prev = preferPath != null ? preferPath : els.folderPickerDrive.value;
   els.folderPickerDrive.innerHTML = "";
-  const ph = document.createElement("option");
-  ph.value = "";
-  ph.textContent = "Drive / root…";
-  els.folderPickerDrive.appendChild(ph);
+  // No empty "Drive…" placeholder — only real drives, system first
   for (const r of pickerRoots) {
     const opt = document.createElement("option");
     opt.value = r.path;
     opt.textContent = r.label || r.path;
+    if (r.system) opt.dataset.system = "1";
     els.folderPickerDrive.appendChild(opt);
   }
-  // Restore selection if still present
-  if (prev && [...els.folderPickerDrive.options].some((o) => o.value === prev)) {
+  const options = [...els.folderPickerDrive.options];
+  if (
+    prev &&
+    options.some((o) => o.value === prev)
+  ) {
     els.folderPickerDrive.value = prev;
+  } else if (pickerDefaultRoot && options.some((o) => o.value === pickerDefaultRoot)) {
+    els.folderPickerDrive.value = pickerDefaultRoot;
+  } else if (options.length) {
+    els.folderPickerDrive.selectedIndex = 0;
   }
 }
 
@@ -269,36 +286,38 @@ function renderFolderCrumbs(crumbs, currentPath) {
 }
 
 /**
- * Sync drive dropdown to current path (best-effort match).
+ * Sync drive dropdown to current path (longest matching root).
  * @param {string} absPath
  */
 function syncDriveSelect(absPath) {
   if (!els.folderPickerDrive || !pickerRoots.length) return;
   const p = String(absPath || "");
-  // Prefer longest matching root path
   let best = "";
   let bestLen = -1;
   for (const r of pickerRoots) {
     const rp = r.path;
     if (!rp) continue;
-    if (p === rp || p.startsWith(rp.endsWith("/") || rp.endsWith("\\") ? rp : rp + "/") ||
-        p.startsWith(rp.endsWith("\\") ? rp : rp + "\\") ||
-        (rp === "/" && p.startsWith("/"))) {
-      const len = rp.length;
-      if (len > bestLen) {
-        best = rp;
-        bestLen = len;
-      }
+    let match = false;
+    if (rp === "/") {
+      match = p.startsWith("/");
+    } else if (p === rp || p.startsWith(rp + "/") || p.startsWith(rp + "\\")) {
+      match = true;
+    } else if (
+      /^[A-Za-z]:\\?$/.test(rp) &&
+      p.toLowerCase().startsWith(rp.slice(0, 2).toLowerCase())
+    ) {
+      match = true;
+    }
+    if (match && rp.length > bestLen) {
+      best = rp;
+      bestLen = rp.length;
     }
   }
-  // Home special-case
-  if (pickerHome && (p === pickerHome || p.startsWith(pickerHome + "/"))) {
-    const homeRoot = pickerRoots.find((r) => r.id === "home");
-    if (homeRoot && homeRoot.path.length >= bestLen) {
-      best = homeRoot.path;
-    }
+  if (best && [...els.folderPickerDrive.options].some((o) => o.value === best)) {
+    els.folderPickerDrive.value = best;
+  } else if (pickerDefaultRoot) {
+    els.folderPickerDrive.value = pickerDefaultRoot;
   }
-  if (best) els.folderPickerDrive.value = best;
 }
 
 /**

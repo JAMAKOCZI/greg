@@ -58,7 +58,7 @@ Read-only file tree + text preview (no editor; writes still go through agent too
 - File: text only, size cap 512 KiB (truncated flag); binary → `415` / `BINARY`
 - HTTP: shared status map — `OUTSIDE_ROOT`/`EACCES` → 403, `NOT_FOUND`/`ROOT_NOT_FOUND` → 404, `BINARY` → 415
 - API: `GET /api/fs/tree|file`, `GET /api/fs/dirs?path=`, `GET /api/fs/roots`, `POST /api/fs/mkdir`
-- Folder picker: clickable **breadcrumbs**, **+ New folder**, **drive/root** select (Home, `/`, Windows drives, `/mnt`…)
+- Folder picker: clickable **breadcrumbs**, **+ New folder**, **drive** select (system drive default: `/` or `C:`; plus mounts / other letters — no Home / empty placeholder)
 - UI: topbar **Files**; sidebar workspace opens the folder modal; selecting a folder opens Files panel
 - UI: refreshes when switching sessions / history / new session; expand retries on error
 

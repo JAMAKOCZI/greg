@@ -294,10 +294,17 @@ describe("resolveUnderRoot / listTree / readWorkspaceFile", () => {
     assert.equal(bad.code, "INVALID_NAME");
   });
 
-  it("listFilesystemRoots includes home", async () => {
+  it("listFilesystemRoots has system drive default, no Home entry", async () => {
     const r = await listFilesystemRoots();
     assert.equal(r.ok, true);
-    assert.ok(r.roots.some((x) => x.id === "home"));
+    assert.ok(!r.roots.some((x) => x.id === "home"));
+    assert.ok(r.defaultRoot);
+    assert.ok(r.roots.some((x) => x.system || x.path === r.defaultRoot));
+    // Linux: system is /
+    if (process.platform !== "win32") {
+      assert.equal(r.defaultRoot, "/");
+      assert.ok(r.roots.some((x) => x.path === "/" && x.system));
+    }
   });
 
   it("rejects readWorkspaceFile on file symlink to outside", async () => {
