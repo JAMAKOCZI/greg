@@ -979,7 +979,8 @@ body.sidebar-collapsed .sidebar {
 
 .main {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  /* topbar + body only — composer floats over transcript, not a third row */
+  grid-template-rows: auto 1fr;
   min-width: 0;
   min-height: 0;
   background: radial-gradient(1000px 520px at 85% -8%, rgba(255, 106, 0, 0.06) 0%, transparent 55%),
@@ -989,9 +990,11 @@ body.sidebar-collapsed .sidebar {
 .main-body {
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 body.files-open .main-body {
@@ -1001,6 +1004,8 @@ body.files-open .main-body {
 /* ── Files panel (read-only tree + preview) ──────────────── */
 
 .files-panel {
+  grid-column: 2;
+  grid-row: 1;
   display: grid;
   grid-template-rows: auto minmax(120px, 42%) 1fr;
   min-width: 0;
@@ -1284,8 +1289,11 @@ body.files-open .main-body {
 /* ── Transcript ──────────────────────────────────────────── */
 
 .transcript {
+  grid-column: 1;
+  grid-row: 1;
   overflow: auto;
-  padding: 28px 24px 20px;
+  /* Bottom pad = floating composer height (set via --composer-overlap in JS) */
+  padding: 28px 24px calc(var(--composer-overlap, 168px) + 12px);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1924,12 +1932,18 @@ body.files-open .main-body {
   background: var(--warn);
 }
 
-/* ── Composer dock (Codex-style floating bar) ─────────────── */
+/* ── Composer dock (floats over transcript; only the pill occludes) ─ */
 
 .composer {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+  justify-self: stretch;
+  z-index: 4;
   padding: 10px 20px 18px;
-  /* No full-width slab — only the dock pill is opaque; page bg shows through */
+  /* Transparent hit area — chat scrolls underneath; clicks pass through */
   background: transparent;
+  pointer-events: none;
 }
 
 .composer-dock {
@@ -1941,6 +1955,7 @@ body.files-open .main-body {
   background: var(--bg-panel);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  pointer-events: auto;
 }
 
 .composer-dock:focus-within {
@@ -2620,7 +2635,7 @@ body.files-open .main-body {
   }
 
   .transcript {
-    padding: 16px 14px 12px;
+    padding: 16px 14px calc(var(--composer-overlap, 168px) + 12px);
   }
 
   .composer {
@@ -2640,7 +2655,15 @@ body.files-open .main-body {
     grid-template-rows: 1fr minmax(40vh, 50%);
   }
 
-  .files-panel {
+  body.files-open .transcript,
+  body.files-open .composer {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  body.files-open .files-panel {
+    grid-column: 1;
+    grid-row: 2;
     border-left: 0;
     border-top: 1px solid var(--border);
   }

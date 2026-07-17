@@ -184,70 +184,71 @@
               <pre id="files-preview" class="files-preview" tabindex="0" aria-label="File preview"></pre>
             </div>
           </aside>
-        </div>
 
-        <footer class="composer">
-          <div class="composer-dock">
-            <div class="composer-context">
-              <button
-                type="button"
-                id="composer-project"
-                class="composer-chip"
-                title="Choose project folder"
-              >
-                <span aria-hidden="true">📁</span>
-                <span id="composer-project-label">Choose project</span>
-              </button>
-            </div>
-            <textarea
-              id="prompt"
-              rows="2"
-              placeholder="Do anything…"
-              disabled
-            ></textarea>
-            <div class="composer-bar">
-              <div class="composer-bar-left">
-                <label class="composer-select-wrap" title="Model">
-                  <span class="sr-only">Model</span>
-                  <select id="model" class="composer-select" aria-label="Grok Build model">
-                    <option value="grok-4.5" selected>Grok 4.5</option>
-                  </select>
-                </label>
-                <label class="composer-select-wrap" title="Effort">
-                  <span class="sr-only">Effort</span>
-                  <select id="effort" class="composer-select" aria-label="Reasoning effort">
-                    <option value="high" selected>High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                </label>
-                <span class="muted small composer-hint" id="hint">New task to start</span>
-              </div>
-              <div class="composer-actions">
+          <!-- Overlays transcript only (same grid cell) so chat scrolls under the dock -->
+          <footer class="composer">
+            <div class="composer-dock">
+              <div class="composer-context">
                 <button
                   type="button"
-                  id="btn-cancel"
-                  class="btn subtle"
-                  disabled
-                  title="Cancel turn (Ctrl+.)"
-                  hidden
+                  id="composer-project"
+                  class="composer-chip"
+                  title="Choose project folder"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  id="btn-send"
-                  class="btn primary btn-send"
-                  disabled
-                  title="Send (Enter)"
-                  aria-label="Send"
-                >
-                  ↑
+                  <span aria-hidden="true">📁</span>
+                  <span id="composer-project-label">Choose project</span>
                 </button>
               </div>
+              <textarea
+                id="prompt"
+                rows="2"
+                placeholder="Do anything…"
+                disabled
+              ></textarea>
+              <div class="composer-bar">
+                <div class="composer-bar-left">
+                  <label class="composer-select-wrap" title="Model">
+                    <span class="sr-only">Model</span>
+                    <select id="model" class="composer-select" aria-label="Grok Build model">
+                      <option value="grok-4.5" selected>Grok 4.5</option>
+                    </select>
+                  </label>
+                  <label class="composer-select-wrap" title="Effort">
+                    <span class="sr-only">Effort</span>
+                    <select id="effort" class="composer-select" aria-label="Reasoning effort">
+                      <option value="high" selected>High</option>
+                      <option value="medium">Medium</option>
+                      <option value="low">Low</option>
+                    </select>
+                  </label>
+                  <span class="muted small composer-hint" id="hint">New task to start</span>
+                </div>
+                <div class="composer-actions">
+                  <button
+                    type="button"
+                    id="btn-cancel"
+                    class="btn subtle"
+                    disabled
+                    title="Cancel turn (Ctrl+.)"
+                    hidden
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-send"
+                    class="btn primary btn-send"
+                    disabled
+                    title="Send (Enter)"
+                    aria-label="Send"
+                  >
+                    ↑
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </footer>
+          </footer>
+        </div>
       </main>
     </div>
 

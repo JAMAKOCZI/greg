@@ -1100,12 +1100,7 @@ function wireBridge(tabId, entry) {
   });
   bridge.on("request", (msg) => {
     if (!isCurrent()) return;
-    const method = msg.method || "request";
-    void persistMessage(tabId, entry, {
-      role: "permission",
-      text: `Agent request: ${method}`,
-      meta: { id: msg.id ?? null, method },
-    }).catch(() => {});
+    // Live UI shows permission cards via SSE; do not persist "Agent request: …" rows
     push("acp-request", msg);
   });
   bridge.on("stderr", (text) => {

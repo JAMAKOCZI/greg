@@ -66,6 +66,18 @@ describe("collapseTranscriptMessages", () => {
     assert.equal(out[1].role, "agent");
   });
 
+  it("drops Agent request / permission history rows", () => {
+    const out = collapseTranscriptMessages([
+      { role: "user", text: "hi" },
+      { role: "permission", text: "Agent request: fs/read_text_file" },
+      { role: "system", text: "Agent request: session/request_permission" },
+      { role: "agent", text: "done" },
+    ]);
+    assert.equal(out.length, 2);
+    assert.equal(out[0].role, "user");
+    assert.equal(out[1].role, "agent");
+  });
+
   it("keeps distinct agent messages", () => {
     const out = collapseTranscriptMessages([
       { role: "agent", text: "A" },

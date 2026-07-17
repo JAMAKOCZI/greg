@@ -66,6 +66,7 @@ const els = {
   importGrokStatus: $("import-grok-status"),
   importGrokRefresh: $("import-grok-refresh"),
   importGrokDone: $("import-grok-done"),
+  composer: document.querySelector(".composer"),
 };
 
 /** When set, main pane is a read-only history replay (not a live tab). */
@@ -2649,10 +2650,7 @@ function renderHistoryMessage(m, host = els.transcript) {
     return;
   }
   if (role === "permission") {
-    const div = document.createElement("div");
-    div.className = "bubble system";
-    div.appendChild(document.createTextNode(text));
-    append(div);
+    // Live permission cards only — never replay "Agent request: …" history noise
     return;
   }
   const div = document.createElement("div");
@@ -3260,7 +3258,26 @@ els.prompt.addEventListener("keydown", (e) => {
 els.prompt.addEventListener("input", () => {
   const st = activeState();
   if (st) st.draft = els.prompt.value;
+  // Textarea may grow; keep transcript clear of the floating dock
+  requestAnimationFrame(syncComposerOverlap);
 });
+
+/**
+ * Transcript bottom padding tracks the floating composer height so content
+ * can scroll under the transparent area while the dock alone occludes.
+ */
+function syncComposerOverlap() {
+  if (!els.composer || !els.transcript) return;
+  const h = Math.ceil(els.composer.getBoundingClientRect().height) || 168;
+  els.transcript.style.setProperty("--composer-overlap", `${h}px`);
+}
+
+if (els.composer && typeof ResizeObserver === "function") {
+  const ro = new ResizeObserver(() => syncComposerOverlap());
+  ro.observe(els.composer);
+}
+syncComposerOverlap();
+window.addEventListener("resize", () => syncComposerOverlap());
 
 document.addEventListener("keydown", (e) => {
   // Ctrl+. — cancel in-flight turn (Codex-style interrupt)
