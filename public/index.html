@@ -29,8 +29,7 @@
 
         <button type="button" id="btn-new" class="btn primary block">New session</button>
 
-        <div class="sidebar-section">
-          <div class="section-label">Workspace</div>
+        <div class="sidebar-section workspace-section">
           <div class="workspace-pick">
             <button
               type="button"
@@ -39,24 +38,20 @@
               title="Browse for a project folder"
             >
               <span class="workspace-path-icon" aria-hidden="true">📁</span>
-              <span id="cwd-label" class="workspace-path-label muted">Choose a folder…</span>
+              <span id="cwd-label" class="workspace-path-label muted">Choose project…</span>
             </button>
             <input id="cwd" type="hidden" value="" />
           </div>
-          <div id="recents-list" class="recents-list" aria-label="Recent workspaces"></div>
-          <p class="recents-hint muted small">Browse or pick a recent project.</p>
+          <div id="recents-list" class="recents-list" aria-label="Recent projects"></div>
         </div>
 
-        <div class="sidebar-section sessions-section">
-          <div class="section-label">Sessions</div>
-          <div id="session-list" class="session-list" aria-label="Active sessions" aria-live="polite"></div>
-          <p class="session-list-hint muted small">Live multi-tab sessions.</p>
-        </div>
-
-        <div class="sidebar-section history-section">
-          <div class="section-label">History</div>
-          <div id="history-list" class="history-list" aria-label="Saved sessions"></div>
-          <p class="history-list-hint muted small">Replay past chats from disk (read-only).</p>
+        <div class="sidebar-section chats-section">
+          <div class="section-label">Chats</div>
+          <div id="chat-list" class="chat-list" aria-label="Conversations" aria-live="polite">
+            <div id="session-list" class="session-list" aria-label="Active sessions"></div>
+            <div id="history-divider" class="chat-divider" hidden>Earlier</div>
+            <div id="history-list" class="history-list" aria-label="History"></div>
+          </div>
         </div>
 
         <div class="sidebar-section settings-section">
@@ -79,17 +74,6 @@
               <option value="low">Low</option>
             </select>
           </div>
-          <div class="field">
-            <label for="default-cwd">Default workspace</label>
-            <input
-              id="default-cwd"
-              type="text"
-              spellcheck="false"
-              autocomplete="off"
-              placeholder="empty = process cwd / GREG_CWD"
-            />
-          </div>
-          <p class="settings-hint muted small">Saved to ~/.greg/settings.json</p>
         </div>
 
         <div class="sidebar-meta" id="meta">
@@ -97,7 +81,7 @@
         </div>
 
         <div class="sidebar-foot muted">
-          Local only · ACP · Apache-2.0
+          Local only · ACP
         </div>
       </aside>
 

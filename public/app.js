@@ -119,18 +119,19 @@ function setWorkspacePath(path, { openFiles = false } = {}) {
   if (els.cwd) els.cwd.value = p;
   if (els.cwdLabel) {
     if (p) {
-      els.cwdLabel.textContent = p;
+      // Short name in UI; full path on hover
+      els.cwdLabel.textContent = cwdBase(p) || p;
       els.cwdLabel.classList.add("has-path");
       els.cwdLabel.title = p;
     } else {
-      els.cwdLabel.textContent = "Choose a folder…";
+      els.cwdLabel.textContent = "Choose project…";
       els.cwdLabel.classList.remove("has-path");
       els.cwdLabel.title = "";
     }
   }
   if (els.btnBrowseCwd) {
     els.btnBrowseCwd.title = p
-      ? `Workspace: ${p} — click to change`
+      ? `${p} — click to change`
       : "Browse for a project folder";
   }
   if (openFiles && p) {
@@ -705,7 +706,10 @@ function readSettingsFromUi() {
     alwaysApprove: els.alwaysApprove?.checked === true,
     model: (els.model?.value || "").trim() || "grok-4.5",
     effort,
-    defaultCwd: (els.defaultCwd?.value || "").trim() || null,
+    // Field removed from slim UI — keep stored value if present
+    defaultCwd: els.defaultCwd
+      ? (els.defaultCwd.value || "").trim() || null
+      : settings.defaultCwd ?? null,
     theme: settings.theme || "dark",
   };
 }
@@ -1098,46 +1102,24 @@ async function openFilePreview(root, path, rowEl) {
 function renderRecents() {
   if (!els.recentsList) return;
   els.recentsList.innerHTML = "";
-  for (const item of recentsCache) {
-    const row = document.createElement("div");
-    row.className = "recent-item";
-
+  // Compact chips — name only, max 5, skip current cwd
+  const current = (els.cwd?.value || "").trim();
+  const items = recentsCache
+    .filter((r) => r.path !== current)
+    .slice(0, 5);
+  for (const item of items) {
     const pick = document.createElement("button");
     pick.type = "button";
-    pick.className = "recent-pick";
+    pick.className = "recent-chip";
+    const name = item.base || cwdBase(item.path) || item.path;
+    pick.textContent = name;
     pick.title = item.path;
-    pick.innerHTML = `
-      <span class="recent-title">${escapeHtml(item.base || cwdBase(item.path))}</span>
-      <span class="recent-sub">${escapeHtml(item.path)}</span>
-    `;
     pick.addEventListener("click", () => {
       if (creatingSession) return;
       setWorkspacePath(item.path, { openFiles: true });
       void newSession();
     });
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "btn icon recent-delete";
-    del.title = "Remove from recents";
-    del.setAttribute("aria-label", "Remove from recents");
-    del.textContent = "×";
-    del.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      try {
-        await api("/api/recents", {
-          method: "DELETE",
-          body: JSON.stringify({ path: item.path }),
-        });
-        await refreshRecents();
-      } catch (err) {
-        console.error(err);
-      }
-    });
-
-    row.appendChild(pick);
-    row.appendChild(del);
-    els.recentsList.appendChild(row);
+    els.recentsList.appendChild(pick);
   }
 }
 
@@ -1213,20 +1195,39 @@ function renderSessionList() {
 
   for (const st of items) {
     const row = document.createElement("div");
-    row.className = "session-item";
-    if (st.tabId === activeTabId) row.classList.add("active");
+    row.className = "chat-item session-item";
+    if (st.tabId === activeTabId && !historyViewId) row.classList.add("active");
     if (!st.alive) row.classList.add("dead");
+    if (st.sending) row.classList.add("busy");
 
     const pick = document.createElement("button");
     pick.type = "button";
-    pick.className = "session-pick";
+    pick.className = "chat-pick session-pick";
     pick.title = st.cwd || st.tabId;
-    if (st.sending) row.classList.add("busy");
-    const busyTag = st.sending ? " · running" : "";
-    pick.innerHTML = `
-      <span class="session-title">${escapeHtml(displayTitle(st))}</span>
-      <span class="session-sub">${escapeHtml(cwdBase(st.cwd) || shortId(st.tabId))}${st.alive ? "" : " · dead"}${busyTag} · ${escapeHtml(shortId(st.tabId))}</span>
-    `;
+
+    const dot = document.createElement("span");
+    dot.className = "chat-dot";
+    if (st.sending) dot.classList.add("busy");
+    else if (st.alive) dot.classList.add("live");
+    else dot.classList.add("dead");
+    dot.setAttribute("aria-hidden", "true");
+
+    const body = document.createElement("span");
+    body.className = "chat-body";
+    const title = document.createElement("span");
+    title.className = "chat-title";
+    title.textContent = displayTitle(st);
+    body.appendChild(title);
+    const proj = cwdBase(st.cwd);
+    if (proj) {
+      const sub = document.createElement("span");
+      sub.className = "chat-sub";
+      sub.textContent = proj;
+      body.appendChild(sub);
+    }
+
+    pick.appendChild(dot);
+    pick.appendChild(body);
     pick.addEventListener("click", () => {
       switchToTab(st.tabId);
       closeSidebar();
@@ -1234,7 +1235,7 @@ function renderSessionList() {
 
     const close = document.createElement("button");
     close.type = "button";
-    close.className = "btn icon session-close";
+    close.className = "btn icon chat-action session-close";
     close.title = "Stop session";
     close.setAttribute("aria-label", "Stop session");
     close.textContent = "×";
@@ -1247,6 +1248,8 @@ function renderSessionList() {
     row.appendChild(close);
     els.sessionList.appendChild(row);
   }
+
+  syncChatDivider();
 }
 
 function connectStream(st) {
@@ -2107,40 +2110,65 @@ function scheduleHistoryRefresh(ms = 800) {
   }, ms);
 }
 
+function syncChatDivider() {
+  const div = $("history-divider");
+  if (!div) return;
+  const hasLive = els.sessionList && els.sessionList.children.length > 0;
+  const hasHist = els.historyList && els.historyList.children.length > 0;
+  div.hidden = !(hasLive && hasHist);
+}
+
 function renderHistoryList() {
   if (!els.historyList) return;
   els.historyList.innerHTML = "";
 
-  // Hide live sessions that are still open from history noise (same id)
+  // Live tabs already appear under active chats — skip same id in history
   const liveIds = new Set(tabStates.keys());
 
   for (const item of historyCache) {
-    // Still show live ones as history too so after stop they remain; prefer showing all
+    if (liveIds.has(item.id)) continue;
+
     const row = document.createElement("div");
-    row.className = "history-item";
+    row.className = "chat-item history-item";
     if (historyViewId === item.id) row.classList.add("active");
-    if (liveIds.has(item.id)) row.classList.add("live");
 
     const pick = document.createElement("button");
     pick.type = "button";
-    pick.className = "history-pick";
-    const title = item.title || item.cwdBase || shortId(item.id);
-    pick.innerHTML = `
-      <span class="history-title">${escapeHtml(title)}</span>
-      <span class="history-sub">${escapeHtml(item.cwdBase || "")} · ${item.messageCount || 0} msgs · ${escapeHtml(shortId(item.id))}</span>
-    `;
+    pick.className = "chat-pick history-pick";
+    const title = item.title || item.cwdBase || "Chat";
+    pick.title = item.cwd || item.id;
+
+    const dot = document.createElement("span");
+    dot.className = "chat-dot past";
+    dot.setAttribute("aria-hidden", "true");
+
+    const body = document.createElement("span");
+    body.className = "chat-body";
+    const titleEl = document.createElement("span");
+    titleEl.className = "chat-title";
+    titleEl.textContent = title;
+    body.appendChild(titleEl);
+    if (item.cwdBase) {
+      const sub = document.createElement("span");
+      sub.className = "chat-sub";
+      sub.textContent = item.cwdBase;
+      body.appendChild(sub);
+    }
+
+    pick.appendChild(dot);
+    pick.appendChild(body);
     pick.addEventListener("click", () => openHistory(item.id));
 
     const del = document.createElement("button");
     del.type = "button";
-    del.className = "btn icon history-delete";
-    del.title = "Delete from history";
+    del.className = "btn icon chat-action history-delete";
+    del.title = "Delete";
     del.setAttribute("aria-label", "Delete from history");
     del.textContent = "×";
     del.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const label = item.title || item.cwdBase || shortId(item.id);
-      if (!confirm(`Delete saved session “${label}”? This cannot be undone.`)) {
+      const label = item.title || item.cwdBase || "chat";
+      if (!confirm(`Delete “${label}”? This cannot be undone.`)) {
         return;
       }
       try {
@@ -2167,6 +2195,8 @@ function renderHistoryList() {
     row.appendChild(del);
     els.historyList.appendChild(row);
   }
+
+  syncChatDivider();
 }
 
 async function newSession() {

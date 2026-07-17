@@ -102,13 +102,17 @@ body {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 18px 16px;
+  gap: 14px;
+  padding: 16px 14px;
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
   min-height: 0;
   overflow: auto;
   z-index: 30;
+}
+
+.workspace-section {
+  gap: 6px;
 }
 
 .brand {
@@ -505,33 +509,6 @@ body {
   box-shadow: var(--focus-ring);
 }
 
-/* Session list (multi-tab) */
-.sessions-section {
-  min-height: 0;
-}
-
-.session-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 0;
-  max-height: 36vh;
-  overflow: auto;
-}
-
-.session-list:empty + .session-list-hint {
-  display: block;
-}
-
-.session-list:not(:empty) + .session-list-hint {
-  display: none;
-}
-
-.session-list-hint {
-  margin: 0;
-  line-height: 1.4;
-}
-
 .settings-section .field {
   margin-top: 10px;
 }
@@ -543,128 +520,79 @@ body {
   display: block;
 }
 
-.settings-section input[type="text"] {
-  width: 100%;
-  padding: 7px 9px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 11.5px;
-}
-
-.settings-section input[type="text"]:focus {
-  outline: 1px solid var(--accent-dim);
-  border-color: var(--accent-dim);
-}
-
-.settings-hint {
-  margin: 8px 0 0;
-  line-height: 1.4;
-}
-
+/* Compact recent project chips under workspace button */
 .recents-list {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-top: 8px;
-  max-height: 18vh;
-  overflow: auto;
 }
 
-.recents-list:empty + .recents-hint {
-  display: block;
-}
-
-.recents-list:not(:empty) + .recents-hint {
+.recents-list:empty {
   display: none;
 }
 
-.recents-hint {
-  margin: 6px 0 0;
-  line-height: 1.4;
-}
-
-.recent-item {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-}
-
-.recent-pick {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
+.recent-chip {
   appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  padding: 6px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  font: inherit;
-}
-
-.recent-pick:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.recent-title {
-  display: block;
-  font-size: 12.5px;
-  font-weight: 550;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recent-sub {
-  display: block;
-  font-size: 10.5px;
+  border: 1px solid var(--border);
+  background: var(--bg);
   color: var(--muted);
-  font-family: var(--mono);
-  white-space: nowrap;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 1px;
+  white-space: nowrap;
 }
 
-.recent-delete {
-  flex-shrink: 0;
-  opacity: 0.5;
+.recent-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  background: var(--bg-hover);
 }
 
-.recent-delete:hover {
-  opacity: 1;
-  color: var(--danger);
+/* Unified chats list (active + history) */
+.chats-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  max-height: min(42vh, 360px);
+  overflow: auto;
+}
+
+.session-list,
 .history-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 0;
-  max-height: 28vh;
-  overflow: auto;
+  gap: 2px;
 }
 
-.history-list:empty + .history-list-hint {
-  display: block;
+.chat-divider {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  padding: 10px 8px 4px;
+  user-select: none;
 }
 
-.history-list:not(:empty) + .history-list-hint {
-  display: none;
+.chat-divider[hidden] {
+  display: none !important;
 }
 
-.history-list-hint {
-  margin: 0;
-  line-height: 1.4;
-}
-
-.history-item {
+.chat-item {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -673,129 +601,125 @@ body {
   background: transparent;
 }
 
-.history-item.active {
+.chat-item.active {
   border-color: rgba(167, 139, 250, 0.35);
   background: rgba(167, 139, 250, 0.08);
 }
 
-.history-item.live .history-sub::after {
-  content: " · live";
-  color: var(--ok);
+.chat-item.dead {
+  opacity: 0.55;
 }
 
-.history-pick {
+.chat-item.busy .chat-dot.busy {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+}
+
+.chat-pick {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   text-align: left;
   appearance: none;
   border: none;
   background: transparent;
   color: var(--text);
-  padding: 8px 8px;
+  font: inherit;
+  padding: 7px 8px;
   border-radius: 8px;
   cursor: pointer;
-  font: inherit;
 }
 
-.history-pick:hover {
+.chat-pick:hover {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.history-title {
-  display: block;
+.chat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--muted);
+}
+
+.chat-dot.live {
+  background: var(--ok);
+}
+
+.chat-dot.busy {
+  background: var(--warn);
+}
+
+.chat-dot.dead {
+  background: var(--muted);
+}
+
+.chat-dot.past {
+  background: transparent;
+  border: 1.5px solid var(--border-strong);
+}
+
+.chat-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-title {
   font-size: 13px;
   font-weight: 550;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.history-sub {
-  display: block;
+.chat-sub {
   font-size: 11px;
   color: var(--muted);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 2px;
+  white-space: nowrap;
 }
 
-.history-delete {
+.chat-action {
   flex-shrink: 0;
-  opacity: 0.55;
+  opacity: 0;
+  margin-right: 2px;
+  color: var(--muted);
 }
 
-.history-delete:hover {
-  opacity: 1;
+.chat-item:hover .chat-action,
+.chat-item:focus-within .chat-action {
+  opacity: 0.7;
+}
+
+.chat-action:hover {
+  opacity: 1 !important;
   color: var(--danger);
 }
 
-.session-item {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-}
-
-.session-item.busy .session-sub {
-  color: var(--warn);
-}
-
-.session-item.active {
-  border-color: rgba(167, 139, 250, 0.35);
-  background: rgba(167, 139, 250, 0.08);
-}
-
-.session-item.dead .session-pick {
-  opacity: 0.55;
-}
-
-.session-pick {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-  border: none;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  padding: 8px 8px;
-  cursor: pointer;
-  border-radius: 8px;
-}
-
-.session-pick:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.session-title {
-  display: block;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-sub {
-  display: block;
-  font-size: 11px;
+.history-item .chat-title {
+  font-weight: 500;
   color: var(--muted);
-  font-family: var(--mono, ui-monospace, Menlo, monospace);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-top: 2px;
 }
 
-.session-close {
-  flex-shrink: 0;
-  margin-right: 2px;
-  padding: 2px 7px;
-  font-size: 14px;
-  line-height: 1.2;
-  color: var(--muted);
-  background: transparent;
+.history-item.active .chat-title {
+  color: var(--text);
+}
+
+/* legacy class hooks used by JS */
+.session-item,
+.history-item {
+  /* base via .chat-item */
+}
+
+.session-close,
+.history-delete {
+  /* via .chat-action */
 }
 
 .session-close:hover:not(:disabled) {
