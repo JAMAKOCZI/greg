@@ -1928,7 +1928,8 @@ body.files-open .main-body {
 
 .composer {
   padding: 10px 20px 18px;
-  background: linear-gradient(180deg, transparent 0%, rgba(16, 17, 19, 0.85) 28%, var(--bg) 100%);
+  /* No full-width slab — only the dock pill is opaque; page bg shows through */
+  background: transparent;
 }
 
 .composer-dock {

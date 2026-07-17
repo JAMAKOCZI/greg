@@ -567,17 +567,11 @@ const server = createGregServer({
         // Product rule: only one live agent at a time (others go to history)
         await stopOtherLiveTabs(tabId);
         try {
+          // No per-resume system lines on disk — UI shows one-shot "Resumed · …"
           await ensureTranscript(tabId, {
             cwd,
             title: entry.title,
             createdAt: entry.createdAt,
-            // Replacing a live tab, or resuming a saved chat under the same id
-            restarted: Boolean(existing) || resume,
-            restartNote: resume
-              ? "Session resumed — continue in this chat"
-              : existing
-                ? "Session restarted"
-                : undefined,
           });
         } catch (persistErr) {
           console.error("[greg] transcript create failed", persistErr);
@@ -854,7 +848,7 @@ async function stopOtherLiveTabs(keepTabId) {
 
 /**
  * @param {string} tabId
- * @param {{ cwd: string, title?: string|null, createdAt?: number, restarted?: boolean }} opts
+ * @param {{ cwd: string, title?: string|null, createdAt?: number }} opts
  */
 async function ensureTranscript(tabId, opts) {
   // Never overwrite: concurrent tool/plan upserts at session start must not wipe messages
@@ -865,15 +859,6 @@ async function ensureTranscript(tabId, opts) {
     title: opts.title ?? null,
     createdAt: opts.createdAt,
   });
-  if (opts.restarted && existingBefore) {
-    await transcripts.appendMessage(tabId, {
-      role: "system",
-      text:
-        typeof opts.restartNote === "string" && opts.restartNote.trim()
-          ? opts.restartNote.trim()
-          : "Session restarted",
-    });
-  }
   if (opts.title) await transcripts.setTitle(tabId, opts.title);
   // Keep cwd fresh on resume into same transcript id
   if (existingBefore && opts.cwd && existingBefore.cwd !== opts.cwd) {

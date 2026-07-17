@@ -53,6 +53,19 @@ describe("collapseTranscriptMessages", () => {
     assert.equal(out[0].text, "hello");
   });
 
+  it("drops legacy Session resumed / restarted system lines", () => {
+    const out = collapseTranscriptMessages([
+      { role: "user", text: "hi" },
+      { role: "system", text: "Session resumed — continue in this chat" },
+      { role: "agent", text: "hello" },
+      { role: "system", text: "Session restarted" },
+      { role: "system", text: "Session resumed — continue in this chat" },
+    ]);
+    assert.equal(out.length, 2);
+    assert.equal(out[0].role, "user");
+    assert.equal(out[1].role, "agent");
+  });
+
   it("keeps distinct agent messages", () => {
     const out = collapseTranscriptMessages([
       { role: "agent", text: "A" },
