@@ -84,40 +84,77 @@ export function renderMarkdown(md, opts = {}) {
     },
   );
 
-  const parts = text.split(/\n{2,}/);
-  for (const part of parts) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
+  // Line-oriented parse so headings/lists work without blank lines between
+  // (agents often emit "### Title\n- item" as one tight block).
+  const lines = text.split("\n");
+  /** @type {string[]} */
+  let para = [];
+  /** @type {string[]} */
+  let listBuf = [];
+  /** @type {string[]} */
+  let quoteBuf = [];
+
+  const flushPara = () => {
+    if (!para.length) return;
+    const body = para.join("\n").trim();
+    para = [];
+    if (!body) return;
+    const html = body
+      .split("\n")
+      .map((line) => inlineMarkdown(line))
+      .join("<br />\n");
+    blocks.push(`<p class="md-p">${html}</p>`);
+  };
+  const flushList = () => {
+    if (!listBuf.length) return;
+    blocks.push(renderList(listBuf.join("\n")));
+    listBuf = [];
+  };
+  const flushQuote = () => {
+    if (!quoteBuf.length) return;
+    const quote = quoteBuf.map((l) => l.replace(/^>\s?/, "")).join("\n");
+    blocks.push(
+      `<blockquote class="md-quote">${inlineMarkdown(quote)}</blockquote>`,
+    );
+    quoteBuf = [];
+  };
+  const flushAll = () => {
+    flushPara();
+    flushList();
+    flushQuote();
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine;
+    const trimmed = line.trim();
 
     const codeMatch = trimmed.match(/^%%CODE(\d+)%%$/);
     if (codeMatch) {
+      flushAll();
       blocks.push(codeStore[Number(codeMatch[1])] || "");
       continue;
     }
     const tableMatch = trimmed.match(/^%%TABLE(\d+)%%$/);
     if (tableMatch) {
+      flushAll();
       blocks.push(tableStore[Number(tableMatch[1])] || "");
       continue;
     }
 
-    if (/^[-*_]{3,}$/.test(trimmed)) {
-      blocks.push("<hr class=\"md-hr\" />");
+    if (!trimmed) {
+      flushAll();
       continue;
     }
 
-    if (trimmed.startsWith(">")) {
-      const quote = trimmed
-        .split("\n")
-        .map((l) => l.replace(/^>\s?/, ""))
-        .join("\n");
-      blocks.push(
-        `<blockquote class="md-quote">${inlineMarkdown(quote)}</blockquote>`,
-      );
+    if (/^[-*_]{3,}$/.test(trimmed)) {
+      flushAll();
+      blocks.push('<hr class="md-hr" />');
       continue;
     }
 
     const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
-    if (heading && !trimmed.includes("\n")) {
+    if (heading) {
+      flushAll();
       const level = heading[1].length;
       blocks.push(
         `<h${level} class="md-h md-h${level}">${inlineMarkdown(heading[2])}</h${level}>`,
@@ -125,18 +162,29 @@ export function renderMarkdown(md, opts = {}) {
       continue;
     }
 
-    if (/^([-*+]|\d+\.)\s/m.test(trimmed)) {
-      blocks.push(renderList(trimmed));
+    if (/^>\s?/.test(line) || (quoteBuf.length && /^>\s?/.test(trimmed))) {
+      flushPara();
+      flushList();
+      quoteBuf.push(line);
       continue;
     }
+    if (quoteBuf.length) flushQuote();
 
-    // Single paragraphs may still have soft newlines
-    const html = trimmed
-      .split("\n")
-      .map((line) => inlineMarkdown(line))
-      .join("<br />\n");
-    blocks.push(`<p class="md-p">${html}</p>`);
+    if (/^([-*+]|\d+\.)\s+/.test(trimmed)) {
+      flushPara();
+      listBuf.push(line);
+      continue;
+    }
+    // Continuation of list item (indented)
+    if (listBuf.length && /^\s{2,}\S/.test(line)) {
+      listBuf.push(line);
+      continue;
+    }
+    if (listBuf.length) flushList();
+
+    para.push(line);
   }
+  flushAll();
 
   return blocks.join("\n");
 }

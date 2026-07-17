@@ -66,6 +66,26 @@ export function statusLabel(status) {
  * @param {number} [max]
  * @returns {string}
  */
+/**
+ * Compact title for noisy execute/bash cards (full command lives in input).
+ * @param {string} title
+ * @param {string} [kind]
+ * @returns {string}
+ */
+export function compactToolTitle(title, kind = "") {
+  const t = String(title || "").trim();
+  const k = String(kind || "").toLowerCase();
+  if (!t) return k || "tool";
+  // ACP often sets title to: Execute `long command…`
+  if (/^execute\b/i.test(t) || k === "execute" || k === "bash" || k === "shell") {
+    if (t.length > 42 || /`/.test(t) || /\n/.test(t)) {
+      return k === "bash" || k === "shell" ? k : "execute";
+    }
+  }
+  if (t.length > 48) return `${t.slice(0, 45).trimEnd()}…`;
+  return t;
+}
+
 export function shortFailSummary(text, max = 160) {
   let s = String(text || "")
     .replace(/\u001b\[[0-9;]*m/g, "")
@@ -637,7 +657,7 @@ export function upsertToolCard(existing, update) {
   const toolCallId = String(
     u.toolCallId || u.tool_call_id || u.id || "",
   );
-  const title = String(
+  const rawTitle = String(
     u.title ||
       u.toolName ||
       u.tool_name ||
@@ -646,12 +666,21 @@ export function upsertToolCard(existing, update) {
       "tool",
   );
   const kind = u.kind ? String(u.kind) : "";
+  const title = compactToolTitle(rawTitle, kind);
   const status = normalizeStatus(u.status);
   const diffs = extractDiffs(u);
   const texts = extractTextSnippets(u);
   const locations = Array.isArray(u.locations) ? u.locations : [];
-  const rawInput = u.rawInput ?? u.raw_input ?? u.input;
+  let rawInput = u.rawInput ?? u.raw_input ?? u.input;
   const rawOutput = u.rawOutput ?? u.raw_output ?? u.output;
+  // If title held the full shell command, keep it available under input when collapsed
+  if (
+    rawTitle !== title &&
+    /^execute\b/i.test(rawTitle) &&
+    (rawInput == null || rawInput === "")
+  ) {
+    rawInput = rawTitle.replace(/^execute\s*/i, "").replace(/^`|`$/g, "");
+  }
 
   const failed = status === "failed";
   const completed = status === "completed";
@@ -660,12 +689,18 @@ export function upsertToolCard(existing, update) {
   const card = existing || document.createElement("div");
   card.className = `card card-tool status-${status}${quietDone ? " is-quiet" : ""}${failed ? " is-failed-quiet" : ""}`;
   if (toolCallId) card.dataset.toolCallId = toolCallId;
+  const prevStatus = card.dataset.toolStatus || "";
+  card.dataset.toolStatus = status;
 
-  // Preserve open state of details if refreshing
+  // Preserve open state only when staying in the same terminal status
+  // (running→completed must force-collapse; do not inherit auto-opened sections).
+  const preserveOpen = prevStatus === status;
   const wasOpen = new Set(
-    [...card.querySelectorAll("details.card-section[open]")].map(
-      (d) => d.querySelector("summary")?.textContent || "",
-    ),
+    preserveOpen
+      ? [...card.querySelectorAll("details.card-section[open]")].map(
+          (d) => d.querySelector("summary")?.textContent || "",
+        )
+      : [],
   );
 
   card.replaceChildren();
@@ -679,6 +714,7 @@ export function upsertToolCard(existing, update) {
   const titleEl = document.createElement("span");
   titleEl.className = "card-title";
   titleEl.textContent = title;
+  if (rawTitle !== title) titleEl.title = rawTitle;
   left.appendChild(titleEl);
 
   if (kind && kind !== title) {
@@ -789,16 +825,15 @@ export function upsertToolCard(existing, update) {
     }
   }
 
-  // Text content — completed: always collapsed; running: open only if short
+  // Text content — completed/failed: always collapsed; running: also collapsed
+  // (user expands; avoids dumping shell walls into the transcript)
   if (texts.length) {
     const joined = texts.join("\n");
     const section = detailsSection(
       "output",
       joined,
       {
-        open:
-          wasOpen.has("output") ||
-          (!quietDone && joined.length < 280),
+        open: wasOpen.has("output"),
         mono: true,
       },
     );
@@ -830,9 +865,7 @@ export function upsertToolCard(existing, update) {
   if (rawInput != null && rawInput !== "" && !inputIsOnlyDiff) {
     const inputStr = prettyJson(rawInput);
     const section = detailsSection("input", inputStr, {
-      open:
-        wasOpen.has("input") ||
-        (!quietDone && inputStr.length < 200),
+      open: wasOpen.has("input"),
       mono: true,
     });
     card.appendChild(section);
@@ -864,9 +897,7 @@ export function upsertToolCard(existing, update) {
     } else {
       card.appendChild(
         detailsSection("output", asStr, {
-          open:
-            wasOpen.has("output") ||
-            (!quietDone && asStr.length < 280),
+          open: wasOpen.has("output"),
           mono: true,
         }),
       );

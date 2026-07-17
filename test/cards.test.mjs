@@ -13,6 +13,7 @@ import {
   sessionUpdateKind,
   mergeToolUpdate,
   shortFailSummary,
+  compactToolTitle,
 } from "../public/cards.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -46,6 +47,22 @@ describe("shortFailSummary", () => {
     const s = shortFailSummary("x".repeat(500), 40);
     assert.ok(s.length <= 40);
     assert.ok(s.endsWith("…"));
+  });
+});
+
+describe("compactToolTitle", () => {
+  it("shortens Execute `…` titles", () => {
+    assert.equal(
+      compactToolTitle(
+        'Execute `[System.IO.File]::ReadAllText((Resolve-Path "index.html"))`',
+        "execute",
+      ),
+      "execute",
+    );
+  });
+
+  it("keeps short normal titles", () => {
+    assert.equal(compactToolTitle("read_file", "read"), "read_file");
   });
 });
 

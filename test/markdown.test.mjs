@@ -50,6 +50,20 @@ describe("renderMarkdown", () => {
     assert.match(html, /<li>/);
   });
 
+  it("renders ### headings without blank lines before lists", () => {
+    const md = `### Poprawki treści i typografii
+- item one
+### HTML i dostępność
+text
+### CSS
+more`;
+    const html = renderMarkdown(md);
+    assert.match(html, /<h3 class="md-h md-h3">Poprawki treści i typografii<\/h3>/);
+    assert.match(html, /<h3 class="md-h md-h3">HTML i dostępność<\/h3>/);
+    assert.match(html, /<h3 class="md-h md-h3">CSS<\/h3>/);
+    assert.match(html, /<ul class="md-list">/);
+  });
+
   it("renders inline code", () => {
     const html = renderMarkdown("Use `foo()` here");
     assert.match(html, /md-inline-code/);
