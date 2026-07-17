@@ -122,6 +122,18 @@ Response fields on `session/new`: `contextSeeded`, `contextSeed: { messageCount,
 
 Atomic writes: temp file + rename via `lib/transcript-store.mjs`.
 
+## Agent stderr in the UI
+
+`grok agent stdio` writes diagnostics to **stderr**. Greg forwards chunks over SSE (`stderr` event) as system bubbles.
+
+Known **non-fatal** patterns are filtered server-side (`lib/agent-stderr.mjs`) so they do not look like session failure:
+
+- `worker quit with fatal: Transport channel closed, when Auth(AuthorizationRequired)` — HTTP MCP OAuth worker (rmcp) died without usable credentials; the agent turn continues, that MCP is simply unavailable
+- `failed to decode … Method not found` — ACP method the agent does not implement
+- `Skipping OAuth MCP in non-interactive mode…`
+
+Real errors still surface. Fix root cause for MCP auth: authenticate the MCP in Grok TUI, set `Authorization` headers, or disable the server in `~/.grok/config.toml` (`enabled = false` / remove `[mcp_servers.*]`).
+
 ## Import Grok Build sessions (Phase 7)
 
 Optional bridge so CLI/TUI history is usable inside Greg:

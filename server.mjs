@@ -49,6 +49,7 @@ import {
   listGrokSessions,
   loadGrokSession,
 } from "./lib/grok-sessions.mjs";
+import { filterAgentStderrForUi } from "./lib/agent-stderr.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
@@ -1088,7 +1089,10 @@ function wireBridge(tabId, entry) {
   });
   bridge.on("stderr", (text) => {
     if (!isCurrent()) return;
-    push("stderr", { text });
+    // Drop non-fatal harness noise (MCP OAuth worker, ACP method-not-found, …)
+    const cleaned = filterAgentStderrForUi(text);
+    if (!cleaned) return;
+    push("stderr", { text: cleaned });
   });
   bridge.on("error", (err) => {
     if (!isCurrent()) return;
