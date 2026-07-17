@@ -542,12 +542,26 @@ body {
   line-height: 1.4;
 }
 
-.sidebar-close {
+/*
+ * Toggle chrome: beat .btn.icon { display: grid } with equal/higher specificity.
+ * Hamburger is always a toggle (desktop collapse + mobile drawer).
+ * Close (✕) only in the mobile drawer header.
+ */
+.btn.icon.sidebar-close {
   display: none;
   margin-left: auto;
 }
 
-.sidebar-open {
+.btn.icon.sidebar-open {
+  display: grid;
+}
+
+/* Desktop collapse: hide left column */
+body.sidebar-collapsed #app {
+  grid-template-columns: 1fr;
+}
+
+body.sidebar-collapsed .sidebar {
   display: none;
 }
 
@@ -1682,6 +1696,15 @@ body.files-open .main-body {
     grid-template-columns: 1fr;
   }
 
+  /* Drawer: never use desktop collapse hide — transform only */
+  body.sidebar-collapsed #app {
+    grid-template-columns: 1fr;
+  }
+
+  body.sidebar-collapsed .sidebar {
+    display: flex;
+  }
+
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -1690,17 +1713,14 @@ body.files-open .main-body {
     transition: transform 0.2s ease;
     border-right: 1px solid var(--border);
     box-shadow: 8px 0 32px rgba(0, 0, 0, 0.45);
+    z-index: 40;
   }
 
   body.sidebar-open .sidebar {
     transform: translateX(0);
   }
 
-  .sidebar-close {
-    display: grid;
-  }
-
-  .sidebar-open {
+  .btn.icon.sidebar-close {
     display: grid;
   }
 
@@ -1709,7 +1729,7 @@ body.files-open .main-body {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.55);
-    z-index: 25;
+    z-index: 35;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;

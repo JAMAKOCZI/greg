@@ -2023,21 +2023,64 @@ async function hydrateSessions() {
   }
 }
 
-// ── Sidebar (mobile) ─────────────────────────────────────────
+// ── Sidebar (desktop collapse + mobile drawer) ───────────────
+
+/** Mobile / narrow layout: off-canvas drawer (matches CSS ≤820px). */
+function isMobileSidebar() {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(max-width: 820px)").matches
+  );
+}
+
+function syncSidebarChrome() {
+  const mobile = isMobileSidebar();
+  const drawerOpen = document.body.classList.contains("sidebar-open");
+  const collapsed = document.body.classList.contains("sidebar-collapsed");
+  if (els.btnSidebarOpen) {
+    const expanded = mobile ? drawerOpen : !collapsed;
+    els.btnSidebarOpen.setAttribute("aria-expanded", expanded ? "true" : "false");
+    els.btnSidebarOpen.title = expanded ? "Hide sidebar" : "Show sidebar";
+  }
+}
 
 function openSidebar() {
-  document.body.classList.add("sidebar-open");
-  if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = false;
+  if (isMobileSidebar()) {
+    document.body.classList.add("sidebar-open");
+    document.body.classList.remove("sidebar-collapsed");
+    if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = false;
+  } else {
+    // Desktop: expand left column
+    document.body.classList.remove("sidebar-collapsed");
+    document.body.classList.remove("sidebar-open");
+    if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
+  }
+  syncSidebarChrome();
 }
 
 function closeSidebar() {
-  document.body.classList.remove("sidebar-open");
-  if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
+  if (isMobileSidebar()) {
+    document.body.classList.remove("sidebar-open");
+    if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
+  } else {
+    // Desktop: collapse left column (hamburger reappears)
+    document.body.classList.add("sidebar-collapsed");
+    document.body.classList.remove("sidebar-open");
+    if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
+  }
+  syncSidebarChrome();
 }
 
 function toggleSidebar() {
-  if (document.body.classList.contains("sidebar-open")) closeSidebar();
-  else openSidebar();
+  if (isMobileSidebar()) {
+    if (document.body.classList.contains("sidebar-open")) closeSidebar();
+    else openSidebar();
+  } else if (document.body.classList.contains("sidebar-collapsed")) {
+    openSidebar();
+  } else {
+    closeSidebar();
+  }
 }
 
 // ── Events ───────────────────────────────────────────────────
@@ -2124,13 +2167,38 @@ document.addEventListener("keydown", (e) => {
 });
 
 if (els.btnSidebarOpen) {
-  els.btnSidebarOpen.addEventListener("click", () => openSidebar());
+  // Toggle: desktop collapse/expand, mobile drawer open/close
+  els.btnSidebarOpen.addEventListener("click", () => toggleSidebar());
 }
 if (els.btnSidebarClose) {
   els.btnSidebarClose.addEventListener("click", () => closeSidebar());
 }
 if (els.sidebarBackdrop) {
   els.sidebarBackdrop.addEventListener("click", () => closeSidebar());
+}
+// Keep drawer/collapse coherent when rotating or resizing across 820px
+if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+  const sidebarMq = window.matchMedia("(max-width: 820px)");
+  const onSidebarMq = () => {
+    if (sidebarMq.matches) {
+      // Entering mobile: drop desktop collapse; drawer starts closed
+      document.body.classList.remove("sidebar-collapsed");
+      if (!document.body.classList.contains("sidebar-open")) {
+        if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
+      }
+    } else {
+      // Entering desktop: close drawer chrome
+      document.body.classList.remove("sidebar-open");
+      if (els.sidebarBackdrop) els.sidebarBackdrop.hidden = true;
+    }
+    syncSidebarChrome();
+  };
+  if (typeof sidebarMq.addEventListener === "function") {
+    sidebarMq.addEventListener("change", onSidebarMq);
+  } else if (typeof sidebarMq.addListener === "function") {
+    sidebarMq.addListener(onSidebarMq);
+  }
+  syncSidebarChrome();
 }
 
 if (els.btnFiles) {
