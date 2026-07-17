@@ -2229,7 +2229,10 @@ body.files-open .main-body {
   font-weight: 600;
   font-size: 13px;
   color: var(--text);
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(420px, 70vw);
 }
 
 .card-kind {
