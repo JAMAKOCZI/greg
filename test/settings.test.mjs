@@ -16,6 +16,7 @@ describe("normalizeSettings / mergeSettings", () => {
     assert.deepEqual(normalizeSettings({}), {
       alwaysApprove: false,
       model: null,
+      effort: null,
       defaultCwd: null,
       theme: "dark",
     });
@@ -24,20 +25,32 @@ describe("normalizeSettings / mergeSettings", () => {
   it("trims model and defaultCwd", () => {
     const s = normalizeSettings({
       alwaysApprove: true,
-      model: "  grok-4  ",
+      model: "  grok-4.5  ",
+      effort: "HIGH",
       defaultCwd: " /tmp/p ",
       theme: " light ",
     });
     assert.equal(s.alwaysApprove, true);
-    assert.equal(s.model, "grok-4");
+    assert.equal(s.model, "grok-4.5");
+    assert.equal(s.effort, "high");
     assert.equal(s.defaultCwd, "/tmp/p");
     assert.equal(s.theme, "light");
+  });
+
+  it("rejects invalid effort", () => {
+    assert.equal(normalizeSettings({ effort: "xhigh" }).effort, null);
   });
 
   it("merge clears model with null", () => {
     const cur = normalizeSettings({ model: "x" });
     const next = mergeSettings(cur, { model: null });
     assert.equal(next.model, null);
+  });
+
+  it("merge clears effort with null", () => {
+    const cur = normalizeSettings({ effort: "high" });
+    const next = mergeSettings(cur, { effort: null });
+    assert.equal(next.effort, null);
   });
 
   it("merge leaves unset fields", () => {

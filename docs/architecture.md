@@ -66,14 +66,18 @@ Anonymized wire samples live in `test/fixtures/acp/` (read/edit/bash/plan/`diff_
 `public/cards.js` parses full `session/update` notifications: `file_path`+`old_string`/`new_string`, `content[]` type `diff`, unified patches in `rawOutput`, status aliases.  
 Capture notes: `scripts/capture-acp-fixtures.md` (no secrets).
 
-## Settings (v0.6)
+## Settings (v0.6+)
 
 - File: `~/.greg/settings.json` (`GREG_SETTINGS_PATH` override)
-- Fields: `alwaysApprove`, `model`, `defaultCwd`, `theme`
-- `GET/PUT /api/settings`; also embedded in `/api/meta`
-- `session/new`: if body has `model` / `alwaysApprove` keys, those win (null model = no override); if omitted, settings apply. UI always sends explicit values.
-- `defaultCwd` on PUT is validated via `resolveWorkspace` (expanded/realpath when valid)
+- Fields: `alwaysApprove`, `model`, `effort` (`low`|`medium`|`high`|null), `defaultCwd`, `theme`
+- UI: **select** for model and effort (not free text)
+- Model list: `GET /api/models` / `/api/meta.models` from `~/.grok/models_cache.json` (official CLI cache), fallback known catalog (`grok-4.5` as of 2026-07)
+- Spawn: `grok agent [-m MODEL] [--reasoning-effort EFFORT] [--always-approve] stdio`
+- `session/new`: body `model` / `effort` / `alwaysApprove` override settings when present (null = no override)
+- `defaultCwd` on PUT is validated via `resolveWorkspace`
 - Effective default workspace: settings.defaultCwd → `GREG_CWD` → process cwd
+
+As of mid‑2026, live Grok Build for a typical SuperGrok account exposes **`grok-4.5`** (default) with effort **high / medium / low**. Composer is a Cursor model line — not currently listed by `grok models` on this CLI.
 
 ## Workspace recents (v0.5)
 

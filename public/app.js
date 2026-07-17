@@ -22,6 +22,7 @@ const els = {
   btnStop: $("btn-stop"),
   alwaysApprove: $("always-approve"),
   model: $("model"),
+  effort: $("effort"),
   defaultCwd: $("default-cwd"),
   sidebar: $("sidebar"),
   btnSidebarOpen: $("btn-sidebar-open"),
@@ -225,13 +226,17 @@ async function api(path, opts = {}) {
   return data;
 }
 
-/** @type {{ alwaysApprove: boolean, model: string|null, defaultCwd: string|null, theme: string }} */
+/** @type {{ alwaysApprove: boolean, model: string|null, effort: string|null, defaultCwd: string|null, theme: string }} */
 let settings = {
   alwaysApprove: false,
   model: null,
+  effort: null,
   defaultCwd: null,
   theme: "dark",
 };
+
+/** @type {{ id: string, name: string, default?: boolean }[]} */
+let availableModels = [{ id: "grok-4.5", name: "Grok 4.5", default: true }];
 
 let settingsSaveTimer = null;
 let settingsLoaded = false;
@@ -240,44 +245,103 @@ let settingsSaveGen = 0;
 /** @type {Promise<void>|null} */
 let settingsSaveChain = null;
 
+/**
+ * Rebuild model <select> from availableModels, preserving current value if possible.
+ * @param {string|null} [prefer]
+ */
+function populateModelSelect(prefer = null) {
+  if (!els.model || els.model.tagName !== "SELECT") return;
+  const current = prefer != null ? prefer : els.model.value;
+  els.model.innerHTML = "";
+  const optDefault = document.createElement("option");
+  optDefault.value = "";
+  optDefault.textContent = "Default (agent)";
+  els.model.appendChild(optDefault);
+
+  const seen = new Set([""]);
+  for (const m of availableModels) {
+    if (!m?.id || seen.has(m.id)) continue;
+    seen.add(m.id);
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.default ? `${m.name} (default)` : m.name || m.id;
+    opt.title = m.description || m.id;
+    els.model.appendChild(opt);
+  }
+  // Keep a previously saved model even if not in the live list
+  if (current && !seen.has(current)) {
+    const opt = document.createElement("option");
+    opt.value = current;
+    opt.textContent = `${current} (saved)`;
+    els.model.appendChild(opt);
+    seen.add(current);
+  }
+  els.model.value = current && seen.has(current) ? current : "";
+}
+
 async function loadMeta() {
   try {
     const meta = await api("/api/meta");
+    if (Array.isArray(meta.models) && meta.models.length) {
+      availableModels = meta.models;
+    }
+    populateModelSelect(meta.settings?.model || "");
     if (meta.settings) applySettingsToUi(meta.settings);
     if (!els.cwd.value) {
       els.cwd.value =
         (meta.settings && meta.settings.defaultCwd) || meta.defaultCwd || "";
     }
+    const modelHint =
+      meta.defaultModel || availableModels.find((m) => m.default)?.id || "grok-4.5";
     els.meta.innerHTML = `
       <div><strong>greg</strong> v${escapeHtml(meta.version)}</div>
       <div class="muted">bin: ${escapeHtml(meta.grokBin)}</div>
+      <div class="muted">models: ${escapeHtml(modelHint)}${
+        meta.modelsSource ? ` · ${escapeHtml(meta.modelsSource)}` : ""
+      }</div>
       <div class="muted">${escapeHtml(meta.platform)}</div>
     `;
   } catch (e) {
     els.meta.textContent = e.message;
+    populateModelSelect();
   }
 }
 
 /**
- * @param {{ alwaysApprove?: boolean, model?: string|null, defaultCwd?: string|null, theme?: string }} s
+ * @param {{ alwaysApprove?: boolean, model?: string|null, effort?: string|null, defaultCwd?: string|null, theme?: string }} s
  */
 function applySettingsToUi(s) {
   settings = {
     alwaysApprove: s.alwaysApprove === true,
     model: s.model ?? null,
+    effort: s.effort ?? null,
     defaultCwd: s.defaultCwd ?? null,
     theme: s.theme || "dark",
   };
   if (els.alwaysApprove) els.alwaysApprove.checked = settings.alwaysApprove;
-  if (els.model) els.model.value = settings.model || "";
+  if (els.model) {
+    populateModelSelect(settings.model || "");
+    els.model.value = settings.model || "";
+  }
+  if (els.effort) {
+    const e = settings.effort || "";
+    els.effort.value =
+      e === "low" || e === "medium" || e === "high" ? e : "";
+  }
   if (els.defaultCwd) els.defaultCwd.value = settings.defaultCwd || "";
   settingsLoaded = true;
 }
 
 function readSettingsFromUi() {
+  const effortRaw = (els.effort?.value || "").trim().toLowerCase();
+  const effort =
+    effortRaw === "low" || effortRaw === "medium" || effortRaw === "high"
+      ? effortRaw
+      : null;
   return {
     alwaysApprove: els.alwaysApprove?.checked === true,
     model: (els.model?.value || "").trim() || null,
+    effort,
     defaultCwd: (els.defaultCwd?.value || "").trim() || null,
     theme: settings.theme || "dark",
   };
@@ -1768,6 +1832,10 @@ async function newSession() {
         // Always send explicit values so session matches the form (WYSIWYG)
         alwaysApprove: els.alwaysApprove?.checked === true,
         model: (els.model?.value || "").trim() || null,
+        effort: (() => {
+          const e = (els.effort?.value || "").trim().toLowerCase();
+          return e === "low" || e === "medium" || e === "high" ? e : null;
+        })(),
       }),
     });
 
@@ -2093,7 +2161,9 @@ if (els.alwaysApprove) {
 }
 if (els.model) {
   els.model.addEventListener("change", () => scheduleSettingsSave());
-  els.model.addEventListener("blur", () => scheduleSettingsSave());
+}
+if (els.effort) {
+  els.effort.addEventListener("change", () => scheduleSettingsSave());
 }
 if (els.defaultCwd) {
   els.defaultCwd.addEventListener("change", () => scheduleSettingsSave());

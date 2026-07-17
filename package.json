@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node server.mjs",
     "dev": "node --watch server.mjs",
-    "check": "node --check server.mjs && node --check lib/acp-bridge.mjs && node --check lib/http.mjs && node --check lib/text.mjs && node --check lib/tabs.mjs && node --check lib/transcript-store.mjs && node --check lib/workspace.mjs && node --check lib/settings.mjs && node --check lib/fs-browse.mjs && node --check scripts/mock-grok-agent.mjs",
+    "check": "node --check server.mjs && node --check lib/acp-bridge.mjs && node --check lib/http.mjs && node --check lib/text.mjs && node --check lib/tabs.mjs && node --check lib/transcript-store.mjs && node --check lib/workspace.mjs && node --check lib/settings.mjs && node --check lib/fs-browse.mjs && node --check lib/models.mjs && node --check scripts/mock-grok-agent.mjs",
     "test": "node --test 'test/**/*.test.mjs'"
   },
   "engines": {

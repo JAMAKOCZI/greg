@@ -35,6 +35,7 @@ import {
   readWorkspaceFile,
   fsBrowseHttpStatus,
 } from "./lib/fs-browse.mjs";
+import { listAvailableModels, normalizeEffort } from "./lib/models.mjs";
 
 const PORT = Number(process.env.PORT || 0);
 const HOST = "127.0.0.1";
@@ -70,6 +71,12 @@ const server = createGregServer({
     if (url.pathname === "/api/meta" && req.method === "GET") {
       try {
         const settings = await settingsStore.load();
+        let modelsPayload = null;
+        try {
+          modelsPayload = await listAvailableModels();
+        } catch {
+          modelsPayload = null;
+        }
         json(res, 200, {
           name: "greg",
           version: "0.8.0",
@@ -78,7 +85,20 @@ const server = createGregServer({
           sessionsDir: SESSIONS_DIR,
           platform: platform(),
           settings,
+          models: modelsPayload?.models || [],
+          modelsSource: modelsPayload?.source || "known",
+          defaultModel: modelsPayload?.defaultModel || "grok-4.5",
         });
+      } catch (err) {
+        json(res, 500, { error: err.message || String(err) });
+      }
+      return true;
+    }
+
+    if (url.pathname === "/api/models" && req.method === "GET") {
+      try {
+        const payload = await listAvailableModels();
+        json(res, 200, payload);
       } catch (err) {
         json(res, 500, { error: err.message || String(err) });
       }
@@ -329,13 +349,26 @@ const server = createGregServer({
         tabs.delete(tabId);
       }
 
-      // Explicit body.model (including null/"") overrides settings for this session
+      // Explicit body fields override settings for this session (null = no override)
       let model = settings.model;
       if (Object.prototype.hasOwnProperty.call(body, "model")) {
         model =
           typeof body.model === "string" && body.model.trim()
             ? body.model.trim()
             : null;
+      }
+      let effort = settings.effort;
+      if (
+        Object.prototype.hasOwnProperty.call(body, "effort") ||
+        Object.prototype.hasOwnProperty.call(body, "reasoningEffort")
+      ) {
+        const raw = Object.prototype.hasOwnProperty.call(body, "effort")
+          ? body.effort
+          : body.reasoningEffort;
+        effort =
+          raw == null || raw === ""
+            ? null
+            : normalizeEffort(raw);
       }
       let alwaysApprove = settings.alwaysApprove;
       if (Object.prototype.hasOwnProperty.call(body, "alwaysApprove")) {
@@ -346,6 +379,7 @@ const server = createGregServer({
         grokBin: GROK_BIN,
         cwd,
         model: model || null,
+        effort: effort || null,
         alwaysApprove,
       });
       const title =

@@ -58,14 +58,20 @@
             <span>Auto-approve tools</span>
           </label>
           <div class="field">
-            <label for="model">Model (optional)</label>
-            <input
-              id="model"
-              type="text"
-              spellcheck="false"
-              autocomplete="off"
-              placeholder="e.g. grok-4 — leave empty for default"
-            />
+            <label for="model">Model</label>
+            <select id="model" aria-label="Grok Build model">
+              <option value="">Default (agent)</option>
+              <option value="grok-4.5">Grok 4.5</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="effort">Effort</label>
+            <select id="effort" aria-label="Reasoning effort">
+              <option value="">Default (model)</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
           </div>
           <div class="field">
             <label for="default-cwd">Default workspace</label>
